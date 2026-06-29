@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime artifacts (directories tracked via .gitkeep, contents ignored)
+logs/*
+!logs/.gitkeep
+screenshots/*
+!screenshots/.gitkeep
+reports/*
+!reports/.gitkeep
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Model weights (large binaries; distributed separately)
+assets/models/*
+!assets/models/.gitkeep
+*.pt
+*.onnx
+*.engine
+
+# Local config overrides
+config/local.yaml

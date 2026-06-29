@@ -1,0 +1,25 @@
+# ============================================================================
+# AI Vision Platform - Dependencies
+# Python 3.12+
+# ============================================================================
+# Pinned with lower bounds; lock exact versions in a future requirements.lock
+# once the dependency surface stabilizes.
+
+# --- Core / Foundation (Phases 1-4) ---
+PyYAML>=6.0.1            # YAML configuration parsing
+numpy>=1.26.0            # Numerical arrays, frame/detection math
+
+# --- Computer Vision (Phases 7-9) ---
+opencv-python>=4.9.0     # Camera capture, frame I/O, drawing
+Pillow>=10.2.0           # Image handling, Tkinter image bridge
+
+# --- AI / Inference (Phase 8) ---
+# Heavyweight; only required once detection plugins are activated.
+ultralytics>=8.1.0       # YOLO detection/segmentation backbone
+
+# --- UI (Phase 5) ---
+# Tkinter + ttk ship with CPython; no third-party UI dependency by design.
+
+# --- Tooling / Tests ---
+pytest>=8.0.0
+pytest-cov>=4.1.0
