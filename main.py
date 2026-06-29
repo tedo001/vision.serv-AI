@@ -21,10 +21,12 @@ from app import __version__
 from app.config.manager import ConfigManager
 from app.core.container import Container
 from app.core.logging_config import configure_logging, get_logger
+from app.ui.state import AppState
 
 # DI service keys (stable identifiers, decoupled from concrete classes).
 SERVICE_CONFIG_MANAGER = "config_manager"
 SERVICE_APP_CONFIG = "app_config"
+SERVICE_APP_STATE = "app_state"
 
 
 def build_container() -> Container:
@@ -38,6 +40,15 @@ def build_container() -> Container:
     container.register_singleton(
         SERVICE_APP_CONFIG,
         lambda c: c.resolve(SERVICE_CONFIG_MANAGER).config,
+    )
+
+    # The framework-agnostic presentation state the UI (any UI) binds to.
+    container.register_singleton(
+        SERVICE_APP_STATE,
+        lambda c: AppState.from_config(
+            product_name=c.resolve(SERVICE_APP_CONFIG).product_name,
+            active_profile=c.resolve(SERVICE_APP_CONFIG).active_profile,
+        ),
     )
     return container
 
@@ -63,13 +74,27 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("UI theme       : %s", config.ui.theme)
     logger.info("=" * 64)
 
-    # Phase 5 will construct and run the Tkinter application here, e.g.:
-    #   from app.ui.app import VisionApp
-    #   return VisionApp(container).run()
-    logger.info(
-        "Foundation initialized. UI and engines arrive in later phases."
-    )
-    return 0
+    # Launch the Tkinter desktop UI. Imported lazily so the foundation (and
+    # the test suite) remain usable on headless hosts that lack Tkinter.
+    try:
+        from app.ui.app import VisionApp
+    except ModuleNotFoundError as exc:  # tkinter not installed in this build
+        logger.error(
+            "Tkinter is unavailable (%s). Install it (e.g. 'apt install "
+            "python3-tk') and run on a machine with a display.", exc,
+        )
+        return 1
+
+    try:
+        app = VisionApp(container)
+    except Exception as exc:  # tk.TclError on headless: no $DISPLAY
+        logger.error(
+            "Could not open a window (%s). A graphical display is required to "
+            "run the desktop UI.", exc,
+        )
+        return 1
+
+    return app.run()
 
 
 if __name__ == "__main__":

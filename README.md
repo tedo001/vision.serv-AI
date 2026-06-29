@@ -49,6 +49,16 @@ only *inward*, toward the core. UI code never mixes with AI code.
 - **Plugins** (`app/plugins`): each AI feature is a self-contained module
   implementing `DetectorPlugin`; new features install without touching core.
 
+### Swappable front-ends
+
+The UI binds to a **framework-agnostic presentation state** (`app/ui/state.py`)
+and a declarative navigation/profile model — no business logic lives inside
+Tkinter widgets. Backend engines push updates into `AppState`; the UI
+subscribes and re-renders. Replacing Tkinter with a web or Qt front-end means
+rewriting only the widget layer (`app/ui/components`, `app/ui/views`,
+`app/ui/app.py`) while `AppState`, navigation, the profile catalog, and all
+backend services stay intact.
+
 ### The detection-to-alert pipeline (target design)
 
 ```
@@ -113,7 +123,7 @@ Built incrementally; each phase is reviewed before the next begins.
 | 2 | Folder structure | ✅ |
 | 3 | Configuration manager | ✅ |
 | 4 | Logging | ✅ |
-| 5 | Tkinter framework | ☐ |
+| 5 | Tkinter framework | ✅ |
 | 6 | Industry profile system | ☐ |
 | 7 | Camera manager | ☐ |
 | 8 | Detection engine | ☐ |

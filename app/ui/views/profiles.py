@@ -1,0 +1,77 @@
+"""Industry Profiles: pick a vertical to load its module bundle.
+
+Renders profile cards from the declarative catalog. Selecting one updates
+``AppState.active_profile``. Phase 6 will wire selection to the profile engine
+(loading models, rules, dashboards, alert policies); here it updates state and
+status so the rest of the UI reacts.
+"""
+
+from __future__ import annotations
+
+from tkinter import ttk
+
+from app.core.logging_config import get_logger
+from app.profiles.catalog import PROFILES, IndustryProfile
+from app.ui.theme import PALETTE
+from app.ui.views.base import BaseView
+from app.ui.widgets import section_title
+
+logger = get_logger(__name__)
+
+
+class ProfilesView(BaseView):
+    def build(self) -> None:
+        section_title(self, "Industry Profiles",
+                      "Selecting a profile auto-enables its AI modules, rules, "
+                      "dashboard, and alerts").pack(anchor="w", fill="x")
+
+        grid = ttk.Frame(self)
+        grid.pack(fill="both", expand=True, pady=16)
+        for i in range(3):
+            grid.columnconfigure(i, weight=1, uniform="profile")
+
+        self._cards: dict[str, ttk.Frame] = {}
+        for idx, profile in enumerate(PROFILES.values()):
+            card = self._make_card(grid, profile)
+            card.grid(row=idx // 3, column=idx % 3, sticky="nsew", padx=8, pady=8)
+            self._cards[profile.key] = card
+
+        self.state.active_profile.subscribe(self._highlight)
+
+    def _make_card(self, parent: ttk.Frame, profile: IndustryProfile) -> ttk.Frame:
+        card = ttk.Frame(parent, style="Surface.TFrame", padding=16)
+        ttk.Label(card, text=profile.display_name, style="H2.TLabel",
+                  background=PALETTE.surface).pack(anchor="w")
+        ttk.Label(card, text=profile.description, style="SurfaceMuted.TLabel",
+                  wraplength=240, justify="left").pack(anchor="w", pady=(4, 8))
+        ttk.Label(card, text=f"{len(profile.modules)} AI modules",
+                  style="SurfaceMuted.TLabel").pack(anchor="w")
+        ttk.Button(card, text="Activate", style="Accent.TButton",
+                   command=lambda k=profile.key: self._select(k)).pack(
+            anchor="w", pady=(12, 0))
+        return card
+
+    def _select(self, key: str) -> None:
+        self.state.active_profile.set(key)
+        self.state.status_message.set(f"Activated profile: {PROFILES[key].display_name}")
+        logger.info("User activated profile %s", key)
+
+    def _highlight(self, active_key: str) -> None:
+        for key, card in self._cards.items():
+            border = PALETTE.accent if key == active_key else PALETTE.surface
+            card.configure(style="Surface.TFrame")
+            # ttk frames can't show a per-instance border color easily; use a
+            # marker label row instead for the active card.
+            self._mark_active(card, key == active_key)
+
+    @staticmethod
+    def _mark_active(card: ttk.Frame, active: bool) -> None:
+        existing = getattr(card, "_active_marker", None)
+        if active and existing is None:
+            marker = ttk.Label(card, text="● ACTIVE", background=PALETTE.surface,
+                               foreground=PALETTE.success, font=("Segoe UI Semibold", 8))
+            marker.pack(anchor="w", pady=(8, 0))
+            card._active_marker = marker  # type: ignore[attr-defined]
+        elif not active and existing is not None:
+            existing.destroy()
+            card._active_marker = None  # type: ignore[attr-defined]
