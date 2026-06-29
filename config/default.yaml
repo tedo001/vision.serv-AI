@@ -45,6 +45,8 @@ camera:
   reconnect_seconds: 5.0
   target_fps: 25
   buffer_size: 1         # 1 = lowest latency (drop stale frames)
+  width: 1280            # requested capture width  (0 = camera default)
+  height: 720            # requested capture height (0 = camera default)
 
 alert:
   enable_sound: true

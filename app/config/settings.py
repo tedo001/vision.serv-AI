@@ -107,6 +107,8 @@ class CameraDefaults:
     reconnect_seconds: float = 5.0
     target_fps: int = 25
     buffer_size: int = 1  # low latency: keep only the freshest frame
+    width: int = 1280     # requested capture width (0 = camera default)
+    height: int = 720     # requested capture height (0 = camera default)
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "CameraDefaults":
@@ -114,6 +116,8 @@ class CameraDefaults:
             reconnect_seconds=float(data.get("reconnect_seconds", 5.0)),
             target_fps=int(data.get("target_fps", 25)),
             buffer_size=int(data.get("buffer_size", 1)),
+            width=int(data.get("width", 1280)),
+            height=int(data.get("height", 720)),
         )
 
 

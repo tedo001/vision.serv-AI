@@ -34,6 +34,13 @@ from app.ui.widgets import section_title
 logger = get_logger(__name__)
 
 _DEVICE_CHOICES = {"Auto": "auto", "CPU": "cpu", "GPU": "cuda"}
+# "Default" -> use the configured camera defaults; others force a resolution.
+_RESOLUTIONS: dict[str, tuple[int, int] | None] = {
+    "Default": None,
+    "640×480": (640, 480),
+    "1280×720": (1280, 720),
+    "1920×1080": (1920, 1080),
+}
 _POLL_MS = 30
 
 
@@ -90,19 +97,27 @@ class VideoDetectionView(BaseView):
         self._device_cb.set("Auto")
         self._device_cb.grid(row=2, column=2, sticky="w", padx=(16, 0))
 
+        # Resolution (laptop-camera configuration)
+        ttk.Label(controls, text="Resolution", style="SurfaceMuted.TLabel").grid(
+            row=1, column=3, sticky="w", padx=(16, 0), pady=(8, 0))
+        self._res_cb = ttk.Combobox(controls, values=list(_RESOLUTIONS),
+                                    state="readonly", width=12)
+        self._res_cb.set("Default")
+        self._res_cb.grid(row=2, column=3, sticky="w", padx=(16, 0))
+
         # Preview-only: test the camera with no model / no weight download.
         self._preview_only = tk.BooleanVar(value=False)
         ttk.Checkbutton(controls, text="Preview only (test camera, no model)",
                         variable=self._preview_only, takefocus=False).grid(
-            row=0, column=2, columnspan=2, sticky="w", padx=(16, 0))
+            row=0, column=2, columnspan=3, sticky="w", padx=(16, 0))
 
         # Camera On/Off toggle
         btns = ttk.Frame(controls, style="Surface.TFrame")
-        btns.grid(row=2, column=3, sticky="e", padx=(16, 0))
+        btns.grid(row=2, column=4, sticky="e", padx=(16, 0))
         self._toggle_btn = ttk.Button(btns, text="▷  Turn Camera On",
                                       style="Accent.TButton", command=self._toggle)
         self._toggle_btn.pack(side="left")
-        controls.columnconfigure(3, weight=1)
+        controls.columnconfigure(4, weight=1)
 
         # Active-model hint
         self._model_hint = ttk.Label(self, style="Muted.TLabel")
@@ -221,11 +236,15 @@ class VideoDetectionView(BaseView):
         self._stats.configure(text=f"Found camera(s): {summary}")
 
     def _make_source(self) -> tuple[OpenCVCameraSource, bool]:
+        cam = self._config.camera
         if self._source_kind.get() == "webcam":
             index = int(self._index_entry.get().strip() or "0")
+            res = _RESOLUTIONS.get(self._res_cb.get())
+            width, height = res if res is not None else (cam.width, cam.height)
             src = OpenCVCameraSource(index, camera_id=f"webcam{index}",
                                      source_type=CameraSourceType.USB,
-                                     buffer_size=self._config.camera.buffer_size)
+                                     buffer_size=cam.buffer_size,
+                                     width=width, height=height, fps=cam.target_fps)
             return src, False
         path = self._file_entry.get().strip()
         if not path:

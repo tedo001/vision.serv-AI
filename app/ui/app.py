@@ -111,7 +111,7 @@ class VisionApp:
             NavSection.VIDEO_DETECTION: lambda p: VideoDetectionView(p, state, self._config),
             NavSection.MODULES: lambda p: ModulesView(p, state),
             NavSection.EVENTS: lambda p: EventsView(p, state),
-            NavSection.REPORTS: lambda p: ReportsView(p, state),
+            NavSection.REPORTS: lambda p: ReportsView(p, state, self._config),
             NavSection.SETTINGS: lambda p: SettingsView(
                 p, state, self._config, on_apply=self._apply_model_settings),
             NavSection.LOGS: lambda p: LogsView(p, state, log_path),

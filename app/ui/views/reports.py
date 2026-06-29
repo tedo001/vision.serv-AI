@@ -1,14 +1,19 @@
-"""Reports: generate and review operational reports.
+"""Reports: generate operational reports and list generated files.
 
-Scaffolding for Phase 12. Date range + type selector + generate action; the
-actual aggregation/export will be implemented against the database layer.
+Generate writes a real file into the configured ``report_dir`` and refreshes
+the list below it. Historical aggregation arrives with the database (Phase 11).
 """
 
 from __future__ import annotations
 
+import time
+import tkinter as tk
 from tkinter import ttk
 
+from app.config.settings import AppConfig
 from app.core.logging_config import get_logger
+from app.reports.generator import ReportContext, generate_report, list_reports
+from app.ui.state import AppState
 from app.ui.views.base import BaseView
 from app.ui.widgets import section_title
 
@@ -16,6 +21,10 @@ logger = get_logger(__name__)
 
 
 class ReportsView(BaseView):
+    def __init__(self, parent: tk.Widget, state: AppState, config: AppConfig) -> None:
+        self._config = config
+        super().__init__(parent, state)
+
     def build(self) -> None:
         section_title(self, "Reports",
                       "Generate safety, attendance, and analytics reports").pack(
@@ -33,24 +42,58 @@ class ReportsView(BaseView):
         self._type.set("Safety Compliance")
         self._type.grid(row=1, column=0, padx=(0, 12))
 
-        ttk.Label(controls, text="From (YYYY-MM-DD)", style="SurfaceMuted.TLabel").grid(
-            row=0, column=1, sticky="w")
-        self._from = ttk.Entry(controls, width=16)
-        self._from.grid(row=1, column=1, padx=(0, 12))
-
-        ttk.Label(controls, text="To (YYYY-MM-DD)", style="SurfaceMuted.TLabel").grid(
-            row=0, column=2, sticky="w")
-        self._to = ttk.Entry(controls, width=16)
-        self._to.grid(row=1, column=2, padx=(0, 12))
-
         ttk.Button(controls, text="Generate", style="Accent.TButton",
-                   command=self._on_generate).grid(row=1, column=3)
+                   command=self._on_generate).grid(row=1, column=1)
+        ttk.Button(controls, text="Refresh list",
+                   command=self._refresh_list).grid(row=1, column=2, padx=(8, 0))
 
-        ttk.Label(self, text="Generated reports will be listed here.",
-                  style="Muted.TLabel").pack(anchor="w")
+        # Generated files list
+        wrap = ttk.Frame(self, style="Surface.TFrame", padding=12)
+        wrap.pack(fill="both", expand=True)
+        cols = ("name", "modified", "size")
+        self._tree = ttk.Treeview(wrap, columns=cols, show="headings", height=12)
+        for col, head, width in (("name", "Report", 360),
+                                 ("modified", "Generated", 200),
+                                 ("size", "Size", 100)):
+            self._tree.heading(col, text=head)
+            self._tree.column(col, width=width, anchor="w")
+        self._tree.pack(fill="both", expand=True)
+
+        self._refresh_list()
 
     def _on_generate(self) -> None:
-        logger.info("Report requested: type=%s from=%s to=%s",
-                    self._type.get(), self._from.get(), self._to.get())
-        self.state.status_message.set(
-            f"'{self._type.get()}' report queued. Reporting arrives in Phase 12.")
+        stats = self.state.stats.value
+        ctx = ReportContext(
+            report_type=self._type.get(),
+            product_name=self.state.product_name.value,
+            profile=self.state.active_profile.value,
+            model=self.state.active_model.value,
+            active_cameras=stats.active_cameras,
+            total_cameras=stats.total_cameras,
+            events_today=stats.events_today,
+            active_alerts=stats.active_alerts,
+        )
+        try:
+            path = generate_report(ctx, self._config.report_dir)
+        except OSError as exc:
+            logger.error("Report generation failed: %s", exc)
+            self.state.status_message.set(f"Report failed: {exc}")
+            return
+        logger.info("Generated report %s", path)
+        self.state.status_message.set(f"Report saved: {path.name}")
+        self._refresh_list()
+
+    def _refresh_list(self) -> None:
+        self._tree.delete(*self._tree.get_children())
+        files = list_reports(self._config.report_dir)
+        if not files:
+            self._tree.insert("", "end", values=("No reports generated yet", "—", "—"))
+            return
+        for path in files:
+            stat = path.stat()
+            modified = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime))
+            self._tree.insert("", "end",
+                              values=(path.name, modified, f"{stat.st_size} B"))
+
+    def on_show(self) -> None:
+        self._refresh_list()

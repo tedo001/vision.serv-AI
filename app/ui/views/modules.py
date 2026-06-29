@@ -38,6 +38,9 @@ class ModulesView(BaseView):
         ttk.Label(self._list, text=f"{profile.display_name} — {len(profile.modules)} modules",
                   style="SurfaceMuted.TLabel").pack(anchor="w", pady=(0, 12))
 
+        # Track which modules are enabled (all on by default).
+        self._enabled: dict[str, tk.BooleanVar] = {}
+
         grid = ttk.Frame(self._list, style="Surface.TFrame")
         grid.pack(fill="both", expand=True)
         for i in range(2):
@@ -46,6 +49,14 @@ class ModulesView(BaseView):
             row = ttk.Frame(grid, style="Surface.TFrame")
             row.grid(row=idx // 2, column=idx % 2, sticky="w", padx=8, pady=4)
             var = tk.BooleanVar(value=True)
-            ttk.Checkbutton(row, variable=var, takefocus=False).pack(side="left")
+            self._enabled[module] = var
+            ttk.Checkbutton(row, variable=var, takefocus=False,
+                            command=lambda m=module: self._on_toggle(m)).pack(side="left")
             ttk.Label(row, text=module, background=PALETTE.surface,
                       foreground=PALETTE.text, font=("Segoe UI", 10)).pack(side="left", padx=6)
+
+    def _on_toggle(self, module: str) -> None:
+        on = sum(1 for v in self._enabled.values() if v.get())
+        state = "enabled" if self._enabled[module].get() else "disabled"
+        self.state.status_message.set(
+            f"{module} {state} — {on}/{len(self._enabled)} modules active")

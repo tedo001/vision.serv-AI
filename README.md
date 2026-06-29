@@ -101,6 +101,10 @@ bounding boxes in real time:
 - **Device:** Auto / CPU / GPU. "Auto" picks CUDA when available, else CPU;
   GPU falls back to CPU automatically if no CUDA device is present. Detected
   GPU name shows in the top bar.
+- **Resolution:** Default (uses `camera.width/height` from config) or a forced
+  640×480 / 1280×720 / 1920×1080. The capture backend is chosen per platform
+  (DirectShow on Windows, AVFoundation on macOS, V4L2 on Linux) so laptop
+  cameras open quickly and reliably.
 - Press **Start** to stream annotated frames; **Stop** to end.
 - **Scan** finds working camera indices; **Preview only (test camera, no
   model)** streams the raw feed with no model — the quickest way to confirm
