@@ -91,6 +91,17 @@ main.py        # composition root / entry point
 
 ---
 
+## Industry profiles drive detection
+
+Activating a profile (Industry Profiles tab) is now functional: it updates the
+live state, **persists** as the default in `config/default.yaml`, and **focuses
+detection** on the object classes relevant to that vertical. Each profile maps
+to the COCO classes the stock YOLO model can already detect (e.g. Construction
+→ person/truck/car/bus/motorcycle/bicycle; Office → person/laptop/cell
+phone/keyboard/…). In Video Detection, "Focus on active profile" filters the
+model output to those classes; untick it to see everything. PPE/fire/fall and
+other safety-specific modules require custom-trained weights — a later phase.
+
 ## Video Detection (live)
 
 The **Video Detection** tab runs the active model on a live source and draws
@@ -171,7 +182,7 @@ Built incrementally; each phase is reviewed before the next begins.
 | 3 | Configuration manager | ✅ |
 | 4 | Logging | ✅ |
 | 5 | Tkinter framework | ✅ |
-| 6 | Industry profile system | ◐ catalog + UI (engine pending) |
+| 6 | Industry profile system | ◐ engine + detection focus (rules/dashboards pending) |
 | 7 | Camera manager | ◐ capture works (multi-cam mgmt pending) |
 | 8 | Detection engine | ◐ runner + YOLO detector (orchestration pending) |
 | 9 | Tracking | ☐ |

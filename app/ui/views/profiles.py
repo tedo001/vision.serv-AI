@@ -8,10 +8,14 @@ status so the rest of the UI reacts.
 
 from __future__ import annotations
 
+import tkinter as tk
+
 from tkinter import ttk
 
 from app.core.logging_config import get_logger
 from app.profiles.catalog import PROFILES, IndustryProfile
+from app.profiles.engine import ProfileEngine
+from app.ui.state import AppState
 from app.ui.theme import PALETTE
 from app.ui.views.base import BaseView
 from app.ui.widgets import section_title
@@ -20,6 +24,10 @@ logger = get_logger(__name__)
 
 
 class ProfilesView(BaseView):
+    def __init__(self, parent: tk.Widget, state: AppState, engine: ProfileEngine) -> None:
+        self._engine = engine
+        super().__init__(parent, state)
+
     def build(self) -> None:
         section_title(self, "Industry Profiles",
                       "Selecting a profile auto-enables its AI modules, rules, "
@@ -46,15 +54,19 @@ class ProfilesView(BaseView):
                   wraplength=240, justify="left").pack(anchor="w", pady=(4, 8))
         ttk.Label(card, text=f"{len(profile.modules)} AI modules",
                   style="SurfaceMuted.TLabel").pack(anchor="w")
+        detectable = ", ".join(profile.coco_classes) or "—"
+        ttk.Label(card, text=f"Detects now: {detectable}",
+                  style="SurfaceMuted.TLabel", wraplength=240,
+                  justify="left").pack(anchor="w", pady=(2, 0))
         ttk.Button(card, text="Activate", style="Accent.TButton",
                    command=lambda k=profile.key: self._select(k)).pack(
             anchor="w", pady=(12, 0))
         return card
 
     def _select(self, key: str) -> None:
-        self.state.active_profile.set(key)
-        self.state.status_message.set(f"Activated profile: {PROFILES[key].display_name}")
-        logger.info("User activated profile %s", key)
+        # Engine updates live state and persists the choice; the active card
+        # re-highlights via the active_profile subscription.
+        self._engine.apply_profile(key)
 
     def _highlight(self, active_key: str) -> None:
         for key, card in self._cards.items():

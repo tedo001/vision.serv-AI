@@ -93,6 +93,12 @@ class ConfigManager:
         self._config = target
         logger.info("Saved configuration to %s", self._config_path)
 
+    def set_active_profile(self, profile_key: str) -> AppConfig:
+        """Persist ``profile_key`` as the active profile."""
+        new_config = replace(self.config, active_profile=profile_key)
+        self.save(new_config)
+        return new_config
+
     def update_detection(
         self,
         *,

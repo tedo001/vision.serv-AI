@@ -26,6 +26,8 @@ from app.detection.model_catalog import get_model
 from app.detection.model_manager import build_detector
 from app.detection.null_detector import NullDetector
 from app.detection.runner import DetectionRunner
+from app.profiles.catalog import get_profile
+from app.profiles.engine import relevant_classes
 from app.ui.state import AppState, ConnectionStatus
 from app.ui.theme import PALETTE
 from app.ui.views.base import BaseView
@@ -109,7 +111,13 @@ class VideoDetectionView(BaseView):
         self._preview_only = tk.BooleanVar(value=False)
         ttk.Checkbutton(controls, text="Preview only (test camera, no model)",
                         variable=self._preview_only, takefocus=False).grid(
-            row=0, column=2, columnspan=3, sticky="w", padx=(16, 0))
+            row=0, column=2, columnspan=2, sticky="w", padx=(16, 0))
+
+        # Focus detection on the active industry profile's relevant objects.
+        self._filter_profile = tk.BooleanVar(value=True)
+        ttk.Checkbutton(controls, text="Focus on active profile",
+                        variable=self._filter_profile, takefocus=False).grid(
+            row=0, column=4, sticky="w", padx=(16, 0))
 
         # Camera On/Off toggle
         btns = ttk.Frame(controls, style="Surface.TFrame")
@@ -123,6 +131,7 @@ class VideoDetectionView(BaseView):
         self._model_hint = ttk.Label(self, style="Muted.TLabel")
         self._model_hint.pack(anchor="w")
         self.state.active_model.subscribe(self._update_model_hint)
+        self.state.active_profile.subscribe(self._update_model_hint)
 
         # Video display
         display_wrap = ttk.Frame(self, style="Surface.TFrame", padding=2)
@@ -156,11 +165,14 @@ class VideoDetectionView(BaseView):
             self._file_entry.delete(0, "end")
             self._file_entry.insert(0, path)
 
-    def _update_model_hint(self, model_key: str) -> None:
-        info = get_model(model_key)
-        name = info.display_name if info else model_key
+    def _update_model_hint(self, _model_key: str = "") -> None:
+        info = get_model(self.state.active_model.value)
+        name = info.display_name if info else self.state.active_model.value
+        profile = get_profile(self.state.active_profile.value)
+        focus = ", ".join(profile.coco_classes) if profile and profile.coco_classes else "all objects"
+        pname = profile.display_name if profile else self.state.active_profile.value
         self._model_hint.configure(
-            text=f"Active model: {name}  (change in Settings → AI Detection Model)")
+            text=f"Model: {name}  •  Profile: {pname}  •  Focus: {focus}")
 
     # -- run control ---------------------------------------------------------
     def _toggle(self) -> None:
@@ -184,6 +196,7 @@ class VideoDetectionView(BaseView):
             device = "cpu"
             self.state.status_message.set("GPU not available — using CPU.")
 
+        class_filter = None
         if self._preview_only.get():
             detector = NullDetector()  # raw feed: no model, no weight download
             self._stats.configure(text="Preview mode — testing camera (no detection).")
@@ -193,7 +206,11 @@ class VideoDetectionView(BaseView):
                 model_override=self.state.active_model.value,
                 device_override=device,
             )
-        self._runner = DetectionRunner(source, detector, loop_video=loop_video)
+            if self._filter_profile.get():
+                classes = relevant_classes(self.state.active_profile.value)
+                class_filter = classes or None  # empty profile -> show all
+        self._runner = DetectionRunner(source, detector, loop_video=loop_video,
+                                       class_filter=class_filter)
         self._runner.start()
 
         self._toggle_btn.configure(text="■  Turn Camera Off")

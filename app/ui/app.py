@@ -20,6 +20,7 @@ from typing import Callable
 from app.config.settings import AppConfig
 from app.core.container import Container
 from app.core.logging_config import get_logger
+from app.profiles.engine import ProfileEngine
 from app.ui.components.right_panel import RightPanel
 from app.ui.components.sidebar import Sidebar
 from app.ui.components.status_bar import StatusBar
@@ -57,6 +58,7 @@ class VisionApp:
         self._config: AppConfig = container.resolve(SERVICE_APP_CONFIG)
         self._state: AppState = container.resolve(SERVICE_APP_STATE)
         self._config_manager = container.resolve(SERVICE_CONFIG_MANAGER)
+        self._profile_engine = ProfileEngine(self._config_manager, self._state)
 
         self._root = tk.Tk()
         self._root.title(self._config.ui.window_title)
@@ -106,7 +108,7 @@ class VisionApp:
         log_path = Path(self._config.logging.log_dir) / "vision_platform.log"
         self._factories = {
             NavSection.DASHBOARD: lambda p: DashboardView(p, state),
-            NavSection.PROFILES: lambda p: ProfilesView(p, state),
+            NavSection.PROFILES: lambda p: ProfilesView(p, state, self._profile_engine),
             NavSection.CAMERAS: lambda p: CamerasView(p, state),
             NavSection.VIDEO_DETECTION: lambda p: VideoDetectionView(p, state, self._config),
             NavSection.MODULES: lambda p: ModulesView(p, state),

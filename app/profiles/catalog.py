@@ -21,6 +21,10 @@ class IndustryProfile:
     display_name: str
     description: str
     modules: tuple[str, ...]
+    # COCO classes the stock YOLO model can detect that are relevant to this
+    # vertical. Used to filter/focus detection so a profile is functional with
+    # the base weights; PPE/fire/etc. require custom-trained models later.
+    coco_classes: tuple[str, ...] = ()
 
 
 PROFILES: dict[str, IndustryProfile] = {
@@ -45,6 +49,7 @@ PROFILES: dict[str, IndustryProfile] = {
             "Attendance",
             "Safety Analytics",
         ),
+        coco_classes=("person", "truck", "car", "bus", "motorcycle", "bicycle"),
     ),
     "classroom": IndustryProfile(
         key="classroom",
@@ -61,6 +66,7 @@ PROFILES: dict[str, IndustryProfile] = {
             "Emergency Detection",
             "Classroom Analytics",
         ),
+        coco_classes=("person", "cell phone", "laptop", "book", "backpack", "chair"),
     ),
     "office": IndustryProfile(
         key="office",
@@ -75,6 +81,8 @@ PROFILES: dict[str, IndustryProfile] = {
             "Smoke Detection",
             "Meeting Room Analytics",
         ),
+        coco_classes=("person", "laptop", "cell phone", "keyboard", "mouse",
+                      "tv", "chair"),
     ),
     "hospital": IndustryProfile(
         key="hospital",
@@ -90,6 +98,7 @@ PROFILES: dict[str, IndustryProfile] = {
             "Fire Detection",
             "Smoke Detection",
         ),
+        coco_classes=("person", "bed", "chair", "bottle"),
     ),
     "warehouse": IndustryProfile(
         key="warehouse",
@@ -105,6 +114,7 @@ PROFILES: dict[str, IndustryProfile] = {
             "Smoke Detection",
             "Inventory Analytics",
         ),
+        coco_classes=("person", "truck", "car", "bicycle"),
     ),
     "factory": IndustryProfile(
         key="factory",
@@ -120,6 +130,7 @@ PROFILES: dict[str, IndustryProfile] = {
             "Restricted Area Detection",
             "Productivity Analytics",
         ),
+        coco_classes=("person", "truck"),
     ),
     "retail": IndustryProfile(
         key="retail",
@@ -133,6 +144,7 @@ PROFILES: dict[str, IndustryProfile] = {
             "Occupancy Analytics",
             "Fire Detection",
         ),
+        coco_classes=("person", "handbag", "backpack", "bottle", "cup"),
     ),
 }
 

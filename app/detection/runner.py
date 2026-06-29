@@ -49,11 +49,15 @@ class DetectionRunner:
         *,
         loop_video: bool = False,
         annotator: Annotator = draw_detections,
+        class_filter: frozenset[str] | None = None,
     ) -> None:
         self._source = source
         self._detector = detector
         self._loop_video = loop_video
         self._annotate = annotator
+        # When set, only detections whose label is in the set are kept. This
+        # is how an industry profile focuses detection on relevant objects.
+        self._class_filter = class_filter
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._lock = threading.Lock()
@@ -117,6 +121,9 @@ class DetectionRunner:
                     break
 
                 detections = self._detector.detect(frame)
+                if self._class_filter is not None:
+                    detections = [d for d in detections
+                                  if d.label in self._class_filter]
                 annotated = self._annotate(frame.image, detections)
 
                 now = time.time()
