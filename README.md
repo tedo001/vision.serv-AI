@@ -102,6 +102,19 @@ bounding boxes in real time:
   GPU falls back to CPU automatically if no CUDA device is present. Detected
   GPU name shows in the top bar.
 - Press **Start** to stream annotated frames; **Stop** to end.
+- **Scan** finds working camera indices; **Preview only (test camera, no
+  model)** streams the raw feed with no model — the quickest way to confirm
+  your laptop camera works before any weights download.
+
+### Test the camera from the terminal
+
+No GUI needed — verify the lap cam and measure capture FPS:
+
+```bash
+python -m tools.camera_test --scan              # list working camera indices
+python -m tools.camera_test --index 0 --frames 60   # capture + FPS test
+python -m tools.camera_test --index 0 --snapshot    # save a frame to screenshots/
+```
 
 Under the hood: an OpenCV `CameraSource` and a `YoloDetector` are handed to a
 background `DetectionRunner` (capture → detect → annotate); the UI polls the

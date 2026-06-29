@@ -16,6 +16,7 @@ from __future__ import annotations
 import tkinter as tk
 from tkinter import filedialog, ttk
 
+from app.camera.diagnostics import list_cameras
 from app.camera.opencv_source import OpenCVCameraSource
 from app.config.settings import AppConfig
 from app.core.device import cuda_available, gpu_info, resolve_device
@@ -23,6 +24,7 @@ from app.core.logging_config import get_logger
 from app.core.models import CameraSourceType
 from app.detection.model_catalog import get_model
 from app.detection.model_manager import build_detector
+from app.detection.null_detector import NullDetector
 from app.detection.runner import DetectionRunner
 from app.ui.state import AppState, ConnectionStatus
 from app.ui.theme import PALETTE
@@ -63,9 +65,13 @@ class VideoDetectionView(BaseView):
 
         ttk.Label(controls, text="Camera index", style="SurfaceMuted.TLabel").grid(
             row=1, column=0, sticky="w", pady=(8, 0))
-        self._index_entry = ttk.Entry(controls, width=8)
+        index_row = ttk.Frame(controls, style="Surface.TFrame")
+        index_row.grid(row=2, column=0, sticky="w")
+        self._index_entry = ttk.Entry(index_row, width=6)
         self._index_entry.insert(0, "0")  # 0 = built-in lap cam
-        self._index_entry.grid(row=2, column=0, sticky="w")
+        self._index_entry.pack(side="left")
+        self._scan_btn = ttk.Button(index_row, text="Scan", width=6, command=self._scan)
+        self._scan_btn.pack(side="left", padx=(6, 0))
 
         ttk.Label(controls, text="Video file", style="SurfaceMuted.TLabel").grid(
             row=1, column=1, sticky="w", pady=(8, 0))
@@ -83,6 +89,12 @@ class VideoDetectionView(BaseView):
                                        state="readonly", width=8)
         self._device_cb.set("Auto")
         self._device_cb.grid(row=2, column=2, sticky="w", padx=(16, 0))
+
+        # Preview-only: test the camera with no model / no weight download.
+        self._preview_only = tk.BooleanVar(value=False)
+        ttk.Checkbutton(controls, text="Preview only (test camera, no model)",
+                        variable=self._preview_only, takefocus=False).grid(
+            row=0, column=2, columnspan=2, sticky="w", padx=(16, 0))
 
         # Start / Stop
         btns = ttk.Frame(controls, style="Surface.TFrame")
@@ -153,11 +165,15 @@ class VideoDetectionView(BaseView):
             device = "cpu"
             self.state.status_message.set("GPU not available — using CPU.")
 
-        detector = build_detector(
-            self._config,
-            model_override=self.state.active_model.value,
-            device_override=device,
-        )
+        if self._preview_only.get():
+            detector = NullDetector()  # raw feed: no model, no weight download
+            self._stats.configure(text="Preview mode — testing camera (no detection).")
+        else:
+            detector = build_detector(
+                self._config,
+                model_override=self.state.active_model.value,
+                device_override=device,
+            )
         self._runner = DetectionRunner(source, detector, loop_video=loop_video)
         self._runner.start()
 
@@ -167,6 +183,39 @@ class VideoDetectionView(BaseView):
         self.state.status_message.set("Detection running…")
         self._stats.configure(text=f"Starting on {device.upper()} …")
         self._poll()
+
+    def _scan(self) -> None:
+        """Find working camera indices off the UI thread, then update the UI."""
+        import threading
+
+        self._scan_btn.configure(state="disabled")
+        self._stats.configure(text="Scanning for cameras…")
+
+        def worker() -> None:
+            try:
+                found = list_cameras(max_index=4)
+            except Exception as exc:  # noqa: BLE001
+                self.after(0, lambda: self._scan_done(None, str(exc)))
+                return
+            self.after(0, lambda: self._scan_done(found, None))
+
+        threading.Thread(target=worker, name="camera-scan", daemon=True).start()
+
+    def _scan_done(self, found, error) -> None:
+        self._scan_btn.configure(state="normal")
+        if error is not None:
+            self._stats.configure(text=f"Scan failed: {error}")
+            return
+        if not found:
+            self._stats.configure(text="No cameras found (indices 0–4).")
+            return
+        first = found[0]
+        self._source_kind.set("webcam")
+        self._sync_inputs()
+        self._index_entry.delete(0, "end")
+        self._index_entry.insert(0, str(first.index))
+        summary = ", ".join(f"#{p.index} ({p.width}×{p.height})" for p in found)
+        self._stats.configure(text=f"Found camera(s): {summary}")
 
     def _make_source(self) -> tuple[OpenCVCameraSource, bool]:
         if self._source_kind.get() == "webcam":
