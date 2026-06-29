@@ -25,6 +25,7 @@ class ModelInfo:
     profile: str          # "fast" | "balanced" | "accurate"
     approx_size_mb: int
     description: str
+    task: str = "detect"  # "detect" (objects) | "pose" (skeleton keypoints)
 
 
 # Ordered fast -> accurate. Keys are stable identifiers stored in config.
@@ -59,6 +60,31 @@ MODELS: dict[str, ModelInfo] = {
         approx_size_mb=113,
         description="Highest accuracy; best for industrial detail. Needs a GPU "
                     "for real-time. Large download on first use.",
+    ),
+    # --- Pose / skeleton models (enable action detection, e.g. falls) -------
+    "yolo11n-pose": ModelInfo(
+        key="yolo11n-pose",
+        display_name="YOLO11 Nano — Pose",
+        weights="yolo11n-pose.pt",
+        family="YOLO11",
+        size_label="Nano",
+        profile="fast",
+        approx_size_mb=6,
+        description="Skeleton keypoints for people; powers fall/action "
+                    "detection. Fast, runs on CPU.",
+        task="pose",
+    ),
+    "yolo11x-pose": ModelInfo(
+        key="yolo11x-pose",
+        display_name="YOLO11 X-Large — Pose",
+        weights="yolo11x-pose.pt",
+        family="YOLO11",
+        size_label="X-Large",
+        profile="accurate",
+        approx_size_mb=113,
+        description="High-accuracy skeleton keypoints for action detection. "
+                    "GPU recommended.",
+        task="pose",
     ),
 }
 

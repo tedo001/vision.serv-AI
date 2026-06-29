@@ -91,6 +91,22 @@ main.py        # composition root / entry point
 
 ---
 
+## Pose & action detection (incidents)
+
+Object detection finds *that* a person is present; **action detection** finds
+*what is happening*. Selecting a **Pose** model (Settings → e.g. "YOLO11 Nano —
+Pose") makes the detector emit body **skeleton keypoints**, drawn on the video.
+With **"Detect falls (action)"** enabled in Video Detection, each person's pose
+is analysed and a **fall** generates a CRITICAL event + alert (red box). Falls
+also work without a pose model via a bounding-box aspect-ratio fallback, just
+less reliably. The heuristic is explainable now and can be swapped for a
+temporal action model later without changing callers.
+
+> The other AI-module toggles (helmet, vest, fire, smoke, …) are placeholders:
+> they require custom-trained models and are not yet backed by inference. Today
+> the working detections are COCO objects (person/vehicle/…) and the **fall**
+> action.
+
 ## Industry profiles drive detection
 
 Activating a profile (Industry Profiles tab) is now functional: it updates the
@@ -185,7 +201,7 @@ Built incrementally; each phase is reviewed before the next begins.
 | 6 | Industry profile system | ◐ engine + detection focus (rules/dashboards pending) |
 | 7 | Camera manager | ◐ capture works (multi-cam mgmt pending) |
 | 8 | Detection engine | ◐ runner + YOLO + event generation (multi-cam pending) |
-| 9 | Tracking | ◐ per-label debounce (full tracking pending) |
+| 9 | Tracking / actions | ◐ pose skeleton + fall detection (full tracking pending) |
 | 10 | Event engine | ✅ debounced events + sinks + screenshots |
 | 11 | Database | ◐ SQLite events store (other tables pending) |
 | 12 | Reports | ◐ generate + list (DB aggregation pending) |

@@ -56,6 +56,7 @@ class DetectionRunner:
         event_engine: EventEngine | None = None,
         profile_id: str = "",
         screenshot_dir: str | None = None,
+        action_fn: Callable[[list[Detection]], list[Detection]] | None = None,
     ) -> None:
         self._source = source
         self._detector = detector
@@ -64,6 +65,9 @@ class DetectionRunner:
         # When set, only detections whose label is in the set are kept. This
         # is how an industry profile focuses detection on relevant objects.
         self._class_filter = class_filter
+        # Optional action analysis (e.g. fall detection from pose). Runs after
+        # filtering and appends synthetic detections (e.g. "fall").
+        self._action_fn = action_fn
         self._event_engine = event_engine
         self._profile_id = profile_id
         self._screenshot_dir = screenshot_dir
@@ -142,6 +146,8 @@ class DetectionRunner:
                 if self._class_filter is not None:
                     detections = [d for d in detections
                                   if d.label in self._class_filter]
+                if self._action_fn is not None:
+                    detections = detections + self._action_fn(detections)
                 annotated = self._annotate(frame.image, detections)
 
                 now = time.time()

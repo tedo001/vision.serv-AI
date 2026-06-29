@@ -112,7 +112,8 @@ class YoloDetector:
             boxes = getattr(result, "boxes", None)
             if boxes is None:
                 continue
-            for box in boxes:
+            keypoints = self._extract_keypoints(result)
+            for i, box in enumerate(boxes):
                 xyxy = box.xyxy[0].tolist()
                 class_id = int(box.cls[0])
                 detections.append(
@@ -122,6 +123,19 @@ class YoloDetector:
                         box=BoundingBox(*xyxy),
                         source_plugin=self._info.key,
                         class_id=class_id,
+                        keypoints=keypoints[i] if i < len(keypoints) else (),
                     )
                 )
         return detections
+
+    @staticmethod
+    def _extract_keypoints(result) -> list[tuple[tuple[float, float, float], ...]]:
+        """Pull per-detection (x, y, conf) joints from a pose result, if any."""
+        kp = getattr(result, "keypoints", None)
+        if kp is None or getattr(kp, "data", None) is None:
+            return []
+        out: list[tuple[tuple[float, float, float], ...]] = []
+        for person in kp.data:  # shape (num_joints, 3)
+            joints = tuple((float(x), float(y), float(c)) for x, y, c in person.tolist())
+            out.append(joints)
+        return out

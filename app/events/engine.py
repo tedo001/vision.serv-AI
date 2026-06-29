@@ -28,6 +28,9 @@ _SEVERITY: dict[str, EventSeverity] = {
     "forklift": EventSeverity.HIGH,
     "fire": EventSeverity.CRITICAL,
     "smoke": EventSeverity.HIGH,
+    # Action-derived labels (from pose/skeleton analysis).
+    "fall": EventSeverity.CRITICAL,
+    "fighting": EventSeverity.HIGH,
 }
 
 

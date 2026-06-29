@@ -24,6 +24,7 @@ from app.core.device import cuda_available, gpu_info, resolve_device
 from app.core.logging_config import get_logger
 from app.core.models import Alert, CameraSourceType, Event, EventSeverity
 from app.database.sqlite_sink import SqliteEventSink
+from app.detection.actions import detect_actions
 from app.detection.model_catalog import get_model
 from app.detection.model_manager import build_detector
 from app.detection.null_detector import NullDetector
@@ -125,6 +126,13 @@ class VideoDetectionView(BaseView):
                         variable=self._filter_profile, takefocus=False).grid(
             row=0, column=4, sticky="w", padx=(16, 0))
 
+        # Action detection (falls). Best with a Pose model, but the box-aspect
+        # fallback works with any model.
+        self._detect_actions = tk.BooleanVar(value=True)
+        ttk.Checkbutton(controls, text="Detect falls (action)",
+                        variable=self._detect_actions, takefocus=False).grid(
+            row=1, column=4, sticky="w", padx=(16, 0))
+
         # Camera On/Off toggle
         btns = ttk.Frame(controls, style="Surface.TFrame")
         btns.grid(row=2, column=4, sticky="e", padx=(16, 0))
@@ -220,11 +228,15 @@ class VideoDetectionView(BaseView):
         event_engine = None
         if not self._preview_only.get():
             event_engine = EventEngine(sinks=(self._ensure_sink(),))
+        action_fn = None
+        if not self._preview_only.get() and self._detect_actions.get():
+            action_fn = detect_actions
         self._runner = DetectionRunner(
             source, detector, loop_video=loop_video, class_filter=class_filter,
             event_engine=event_engine,
             profile_id=self.state.active_profile.value,
             screenshot_dir=self._config.screenshot_dir,
+            action_fn=action_fn,
         )
         self._runner.start()
 

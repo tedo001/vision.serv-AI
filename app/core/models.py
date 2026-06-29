@@ -95,13 +95,20 @@ class BoundingBox:
 # ============================================================================
 @dataclass(frozen=True, slots=True)
 class Detection:
-    """A single object detected in one frame by one detector/plugin."""
+    """A single object detected in one frame by one detector/plugin.
+
+    ``keypoints`` carries pose/skeleton joints when a pose model produced this
+    detection: a tuple of (x, y, confidence) per joint (COCO-17 order for
+    person). Empty for plain object detection. Action analysis (e.g. fall
+    detection) reads these.
+    """
 
     label: str
     confidence: float
     box: BoundingBox
     source_plugin: str
     class_id: Optional[int] = None
+    keypoints: tuple[tuple[float, float, float], ...] = ()
     timestamp: float = field(default_factory=time.time)
 
 
