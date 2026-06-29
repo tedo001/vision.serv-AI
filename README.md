@@ -167,9 +167,9 @@ Built incrementally; each phase is reviewed before the next begins.
 | 3 | Configuration manager | ✅ |
 | 4 | Logging | ✅ |
 | 5 | Tkinter framework | ✅ |
-| 6 | Industry profile system | ☐ |
-| 7 | Camera manager | ☐ |
-| 8 | Detection engine | ☐ |
+| 6 | Industry profile system | ◐ catalog + UI (engine pending) |
+| 7 | Camera manager | ◐ capture works (multi-cam mgmt pending) |
+| 8 | Detection engine | ◐ runner + YOLO detector (orchestration pending) |
 | 9 | Tracking | ☐ |
 | 10 | Event engine | ☐ |
 | 11 | Database | ☐ |

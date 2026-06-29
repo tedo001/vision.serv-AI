@@ -18,6 +18,7 @@ from typing import Callable, Optional
 
 from app.config.settings import AppConfig
 from app.core.logging_config import get_logger
+from app.detection.downloader import download_model, is_downloaded, weights_path
 from app.detection.model_catalog import MODELS, get_model
 from app.ui.state import AppState
 from app.ui.theme import PALETTE
@@ -98,13 +99,21 @@ class SettingsView(BaseView):
         self._conf_lbl = self._slider(card, "Confidence threshold", self._conf_var)
         self._iou_lbl = self._slider(card, "IoU (NMS) threshold", self._iou_var)
 
-        # Model info + apply
+        # Model info + download status
         self._info_lbl = ttk.Label(card, text="", style="SurfaceMuted.TLabel",
                                    wraplength=720, justify="left")
-        self._info_lbl.pack(anchor="w", pady=(4, 12))
+        self._info_lbl.pack(anchor="w", pady=(4, 4))
+        self._download_lbl = ttk.Label(card, text="", style="SurfaceMuted.TLabel")
+        self._download_lbl.pack(anchor="w", pady=(0, 12))
 
-        ttk.Button(card, text="Apply & Save", style="Accent.TButton",
-                   command=self._apply).pack(anchor="w")
+        # Actions
+        actions = ttk.Frame(card, style="Surface.TFrame")
+        actions.pack(anchor="w")
+        ttk.Button(actions, text="Apply & Save", style="Accent.TButton",
+                   command=self._apply).pack(side="left")
+        self._download_btn = ttk.Button(actions, text="Download weights",
+                                        command=self._download)
+        self._download_btn.pack(side="left", padx=(8, 0))
 
         self._refresh_info()
 
@@ -124,11 +133,59 @@ class SettingsView(BaseView):
         info = get_model(self._key_by_label[self._model_cb.get()])
         if info is None:
             self._info_lbl.configure(text="")
+            self._download_lbl.configure(text="")
             return
         self._info_lbl.configure(
             text=f"{info.family} · {info.size_label} · ~{info.approx_size_mb} MB "
                  f"({info.profile}).  {info.description}"
         )
+        self._refresh_download_status(info)
+
+    def _refresh_download_status(self, info) -> None:
+        downloaded = is_downloaded(info, self._config.detection.model_dir)
+        if downloaded:
+            self._download_lbl.configure(
+                text=f"✓ Downloaded — {weights_path(info, self._config.detection.model_dir)}",
+                foreground=PALETTE.success)
+            self._download_btn.configure(state="disabled", text="Downloaded")
+        else:
+            self._download_lbl.configure(
+                text=f"Not downloaded (~{info.approx_size_mb} MB will be fetched).",
+                foreground=PALETTE.text_muted)
+            self._download_btn.configure(state="normal", text="Download weights")
+
+    def _download(self) -> None:
+        info = get_model(self._key_by_label[self._model_cb.get()])
+        if info is None:
+            return
+        import threading
+
+        self._download_btn.configure(state="disabled", text="Downloading…")
+        self._download_lbl.configure(text=f"Downloading {info.display_name} …",
+                                     foreground=PALETTE.text_muted)
+        self.state.status_message.set(f"Downloading {info.display_name} …")
+        model_dir = self._config.detection.model_dir
+
+        def worker() -> None:
+            try:
+                download_model(info, model_dir)
+                err = None
+            except Exception as exc:  # noqa: BLE001
+                err = str(exc)
+            self.after(0, lambda: self._download_done(info, err))
+
+        threading.Thread(target=worker, name="model-download", daemon=True).start()
+
+    def _download_done(self, info, error) -> None:
+        if error is not None:
+            logger.error("Model download failed: %s", error)
+            self._download_lbl.configure(text=f"Download failed: {error}",
+                                         foreground=PALETTE.danger)
+            self._download_btn.configure(state="normal", text="Retry download")
+            self.state.status_message.set("Model download failed.")
+            return
+        self._refresh_download_status(info)
+        self.state.status_message.set(f"{info.display_name} ready.")
 
     def _apply(self) -> None:
         model_key = self._key_by_label[self._model_cb.get()]

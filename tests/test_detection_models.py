@@ -11,6 +11,7 @@ import pytest
 
 from app.config.manager import ConfigManager
 from app.core.exceptions import DetectionError
+from app.detection.downloader import download_model, is_downloaded, weights_path
 from app.detection.model_catalog import MODELS, get_model, is_known_model
 from app.detection.model_manager import available_models, build_detector
 from app.detection.yolo_detector import YoloDetector
@@ -57,6 +58,24 @@ def test_update_detection_rejects_bad_threshold(tmp_path: Path) -> None:
     manager.load()
     with pytest.raises(Exception):
         manager.update_detection(confidence=2.0)
+
+
+# --- downloader -------------------------------------------------------------
+def test_weights_path_and_is_downloaded(tmp_path: Path) -> None:
+    info = MODELS["yolo26n"]
+    assert not is_downloaded(info, tmp_path)
+    # Simulate a present weights file.
+    (tmp_path / info.weights).write_bytes(b"fake-weights")
+    assert is_downloaded(info, tmp_path)
+    assert weights_path(info, tmp_path).name == info.weights
+
+
+def test_download_is_noop_when_already_present(tmp_path: Path) -> None:
+    info = MODELS["yolo11n"]
+    target = tmp_path / info.weights
+    target.write_bytes(b"x")
+    # Must not import/download anything when the file already exists.
+    assert download_model(info, tmp_path) == target
 
 
 # --- detector ---------------------------------------------------------------

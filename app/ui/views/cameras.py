@@ -39,7 +39,12 @@ class CamerasView(BaseView):
             self._tree.heading(col, text=head)
             self._tree.column(col, width=width, anchor="w")
         self._tree.pack(fill="both", expand=True)
+        self._count = 0
         self._empty_row()
+
+        # Remove-selected action makes the table interactive both ways.
+        ttk.Button(table_wrap, text="Remove selected",
+                   command=self._remove_selected).pack(anchor="w", pady=(8, 0))
 
         # --- add form -------------------------------------------------------
         form = ttk.Frame(body, style="Surface.TFrame", padding=16)
@@ -65,14 +70,34 @@ class CamerasView(BaseView):
         return entry
 
     def _empty_row(self) -> None:
-        self._tree.insert("", "end", values=("No cameras configured", "—", "—", "—"))
+        self._placeholder = self._tree.insert(
+            "", "end", values=("No cameras configured", "—", "—", "—"))
 
     def _on_add(self) -> None:
-        name = self._name.get().strip() or "Unnamed"
+        name = self._name.get().strip() or f"Camera {self._count + 1}"
         cam_type = self._type.get()
-        source = self._source.get().strip()
-        # Phase 7 will validate and open the source; for now record intent.
-        logger.info("Add-camera requested: name=%s type=%s source=%s",
-                    name, cam_type, source)
+        source = self._source.get().strip() or "0"
+        if self._placeholder is not None:
+            self._tree.delete(self._placeholder)
+            self._placeholder = None
+        self._tree.insert("", "end", values=(name, cam_type, source, "Configured"))
+        self._count += 1
+        self._name.delete(0, "end")
+        self._source.delete(0, "end")
+        logger.info("Camera added: name=%s type=%s source=%s", name, cam_type, source)
         self.state.status_message.set(
-            f"Camera '{name}' queued ({cam_type}). Capture arrives in Phase 7.")
+            f"Added camera '{name}' ({cam_type}). Live capture: Video Detection tab.")
+
+    def _remove_selected(self) -> None:
+        selection = self._tree.selection()
+        if not selection:
+            self.state.status_message.set("Select a camera row to remove.")
+            return
+        for item in selection:
+            if item == self._placeholder:
+                continue
+            self._tree.delete(item)
+            self._count = max(0, self._count - 1)
+        if self._count == 0 and self._placeholder is None:
+            self._empty_row()
+        self.state.status_message.set("Camera removed.")

@@ -96,15 +96,12 @@ class VideoDetectionView(BaseView):
                         variable=self._preview_only, takefocus=False).grid(
             row=0, column=2, columnspan=2, sticky="w", padx=(16, 0))
 
-        # Start / Stop
+        # Camera On/Off toggle
         btns = ttk.Frame(controls, style="Surface.TFrame")
         btns.grid(row=2, column=3, sticky="e", padx=(16, 0))
-        self._start_btn = ttk.Button(btns, text="▷ Start", style="Accent.TButton",
-                                     command=self._start)
-        self._start_btn.pack(side="left")
-        self._stop_btn = ttk.Button(btns, text="■ Stop", command=self._stop,
-                                    state="disabled")
-        self._stop_btn.pack(side="left", padx=(6, 0))
+        self._toggle_btn = ttk.Button(btns, text="▷  Turn Camera On",
+                                      style="Accent.TButton", command=self._toggle)
+        self._toggle_btn.pack(side="left")
         controls.columnconfigure(3, weight=1)
 
         # Active-model hint
@@ -151,6 +148,13 @@ class VideoDetectionView(BaseView):
             text=f"Active model: {name}  (change in Settings → AI Detection Model)")
 
     # -- run control ---------------------------------------------------------
+    def _toggle(self) -> None:
+        """Single On/Off control for the laptop camera / detection run."""
+        if self._runner is not None and self._runner.is_running:
+            self._stop()
+        else:
+            self._start()
+
     def _start(self) -> None:
         if self._runner and self._runner.is_running:
             return
@@ -177,8 +181,7 @@ class VideoDetectionView(BaseView):
         self._runner = DetectionRunner(source, detector, loop_video=loop_video)
         self._runner.start()
 
-        self._start_btn.configure(state="disabled")
-        self._stop_btn.configure(state="normal")
+        self._toggle_btn.configure(text="■  Turn Camera Off")
         self.state.camera_status.set(ConnectionStatus.ONLINE)
         self.state.status_message.set("Detection running…")
         self._stats.configure(text=f"Starting on {device.upper()} …")
@@ -276,11 +279,10 @@ class VideoDetectionView(BaseView):
         if self._runner is not None:
             self._runner.stop()
             self._runner = None
-        self._start_btn.configure(state="normal")
-        self._stop_btn.configure(state="disabled")
+        self._toggle_btn.configure(text="▷  Turn Camera On")
         self.state.camera_status.set(ConnectionStatus.OFFLINE)
         self.state.fps.set(0.0)
-        self.state.status_message.set("Detection stopped.")
+        self.state.status_message.set("Camera off.")
 
     def on_show(self) -> None:
         gpu, name = gpu_info()
