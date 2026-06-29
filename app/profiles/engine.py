@@ -50,6 +50,23 @@ class ProfileEngine:
         logger.info("Applied profile %s (classes=%s)",
                     profile.key, ", ".join(profile.coco_classes) or "all")
 
+    def clear_profile(self) -> None:
+        """Deactivate the current profile (no focus → detect everything)."""
+        self._state.active_profile.set("")
+        try:
+            self._config_manager.set_active_profile("")
+        except Exception as exc:  # noqa: BLE001 - persistence is best-effort
+            logger.error("Failed to persist profile deactivation: %s", exc)
+        self._state.status_message.set("No profile active — detecting all objects.")
+        logger.info("Cleared active profile")
+
+    def toggle_profile(self, profile_key: str) -> None:
+        """Activate ``profile_key``, or deactivate it if already active."""
+        if self._state.active_profile.value == profile_key:
+            self.clear_profile()
+        else:
+            self.apply_profile(profile_key)
+
     def relevant_classes(self, profile_key: str | None = None) -> frozenset[str]:
         key = profile_key or self._state.active_profile.value
         return relevant_classes(key)

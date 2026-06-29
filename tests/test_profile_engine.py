@@ -39,6 +39,37 @@ def test_apply_profile_updates_state_and_persists(tmp_path: Path) -> None:
     assert ConfigManager(tmp_path / "c.yaml").load().active_profile == "warehouse"
 
 
+def test_toggle_activates_then_deactivates(tmp_path: Path) -> None:
+    manager = ConfigManager(tmp_path / "default.yaml",
+                            overrides_path=tmp_path / "local.yaml")
+    manager.load()
+    state = AppState()
+    engine = ProfileEngine(manager, state)
+
+    engine.toggle_profile("office")          # not active -> activate
+    assert state.active_profile.value == "office"
+
+    engine.toggle_profile("office")          # active -> deactivate
+    assert state.active_profile.value == ""
+    # Deactivated => no class focus => detection shows everything.
+    assert engine.relevant_classes() == frozenset()
+
+    engine.toggle_profile("retail")          # switch to a different one
+    assert state.active_profile.value == "retail"
+
+
+def test_clear_profile_persists_empty(tmp_path: Path) -> None:
+    manager = ConfigManager(tmp_path / "default.yaml",
+                            overrides_path=tmp_path / "local.yaml")
+    manager.load()
+    engine = ProfileEngine(manager, AppState())
+    engine.apply_profile("warehouse")
+    engine.clear_profile()
+    reloaded = ConfigManager(tmp_path / "default.yaml",
+                             overrides_path=tmp_path / "local.yaml").load()
+    assert reloaded.active_profile == ""
+
+
 def test_apply_unknown_profile_raises(tmp_path: Path) -> None:
     manager = ConfigManager(tmp_path / "c.yaml")
     manager.load()

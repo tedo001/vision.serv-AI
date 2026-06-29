@@ -176,7 +176,7 @@ class VideoDetectionView(BaseView):
         name = info.display_name if info else self.state.active_model.value
         profile = get_profile(self.state.active_profile.value)
         focus = ", ".join(profile.coco_classes) if profile and profile.coco_classes else "all objects"
-        pname = profile.display_name if profile else self.state.active_profile.value
+        pname = profile.display_name if profile else "None"
         self._model_hint.configure(
             text=f"Model: {name}  •  Profile: {pname}  •  Focus: {focus}")
 

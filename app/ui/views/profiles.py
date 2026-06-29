@@ -39,11 +39,13 @@ class ProfilesView(BaseView):
             grid.columnconfigure(i, weight=1, uniform="profile")
 
         self._cards: dict[str, ttk.Frame] = {}
+        self._buttons: dict[str, ttk.Button] = {}
         for idx, profile in enumerate(PROFILES.values()):
             card = self._make_card(grid, profile)
             card.grid(row=idx // 3, column=idx % 3, sticky="nsew", padx=8, pady=8)
             self._cards[profile.key] = card
 
+        # Immediate subscription paints initial Active/Deactivate state.
         self.state.active_profile.subscribe(self._highlight)
 
     def _make_card(self, parent: ttk.Frame, profile: IndustryProfile) -> ttk.Frame:
@@ -58,23 +60,29 @@ class ProfilesView(BaseView):
         ttk.Label(card, text=f"Detects now: {detectable}",
                   style="SurfaceMuted.TLabel", wraplength=240,
                   justify="left").pack(anchor="w", pady=(2, 0))
-        ttk.Button(card, text="Activate", style="Accent.TButton",
-                   command=lambda k=profile.key: self._select(k)).pack(
-            anchor="w", pady=(12, 0))
+        btn = ttk.Button(card, text="Activate", style="Accent.TButton",
+                         command=lambda k=profile.key: self._select(k))
+        btn.pack(anchor="w", pady=(12, 0))
+        self._buttons[profile.key] = btn
         return card
 
     def _select(self, key: str) -> None:
-        # Engine updates live state and persists the choice; the active card
-        # re-highlights via the active_profile subscription.
-        self._engine.apply_profile(key)
+        # Toggle: activating the already-active profile deactivates it. The
+        # engine updates state + persistence; buttons/markers refresh via the
+        # active_profile subscription below.
+        self._engine.toggle_profile(key)
 
     def _highlight(self, active_key: str) -> None:
+        """Reflect the active profile: its button reads 'Deactivate', rest 'Activate'."""
         for key, card in self._cards.items():
-            border = PALETTE.accent if key == active_key else PALETTE.surface
-            card.configure(style="Surface.TFrame")
-            # ttk frames can't show a per-instance border color easily; use a
-            # marker label row instead for the active card.
-            self._mark_active(card, key == active_key)
+            is_active = key == active_key
+            button = self._buttons.get(key)
+            if button is not None:
+                button.configure(
+                    text="● Deactivate" if is_active else "Activate",
+                    style="Accent.TButton" if is_active else "TButton",
+                )
+            self._mark_active(card, is_active)
 
     @staticmethod
     def _mark_active(card: ttk.Frame, active: bool) -> None:

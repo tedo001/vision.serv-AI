@@ -69,4 +69,7 @@ class TopNav(ttk.Frame):
 
     def _on_profile(self, key: str) -> None:
         profile = get_profile(key)
-        self._profile_var.set(profile.display_name if profile else key.title())
+        if profile is not None:
+            self._profile_var.set(profile.display_name)
+        else:
+            self._profile_var.set(key.title() if key else "None")

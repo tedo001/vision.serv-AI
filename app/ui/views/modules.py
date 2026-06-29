@@ -32,7 +32,9 @@ class ModulesView(BaseView):
             w.destroy()
         profile = get_profile(profile_key)
         if profile is None:
-            ttk.Label(self._list, text="Unknown profile", style="SurfaceMuted.TLabel").pack()
+            msg = ("No active profile — activate one in Industry Profiles to "
+                   "load its AI modules." if not profile_key else "Unknown profile")
+            ttk.Label(self._list, text=msg, style="SurfaceMuted.TLabel").pack(anchor="w")
             return
 
         ttk.Label(self._list, text=f"{profile.display_name} — {len(profile.modules)} modules",
