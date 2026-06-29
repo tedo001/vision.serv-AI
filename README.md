@@ -184,12 +184,12 @@ Built incrementally; each phase is reviewed before the next begins.
 | 5 | Tkinter framework | ✅ |
 | 6 | Industry profile system | ◐ engine + detection focus (rules/dashboards pending) |
 | 7 | Camera manager | ◐ capture works (multi-cam mgmt pending) |
-| 8 | Detection engine | ◐ runner + YOLO detector (orchestration pending) |
-| 9 | Tracking | ☐ |
-| 10 | Event engine | ☐ |
-| 11 | Database | ☐ |
-| 12 | Reports | ☐ |
-| 13 | Alert system | ☐ |
+| 8 | Detection engine | ◐ runner + YOLO + event generation (multi-cam pending) |
+| 9 | Tracking | ◐ per-label debounce (full tracking pending) |
+| 10 | Event engine | ✅ debounced events + sinks + screenshots |
+| 11 | Database | ◐ SQLite events store (other tables pending) |
+| 12 | Reports | ◐ generate + list (DB aggregation pending) |
+| 13 | Alert system | ◐ alerts from high-severity events (policies/sound pending) |
 | 14 | Optimization | ☐ |
 
 ---

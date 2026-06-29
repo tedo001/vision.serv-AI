@@ -33,7 +33,9 @@ def build_container() -> Container:
     """Assemble and return the application's DI container."""
     container = Container()
 
-    config_manager = ConfigManager()
+    # Runtime changes persist to config/local.yaml (gitignored), layered over
+    # the committed config/default.yaml template.
+    config_manager = ConfigManager(overrides_path="config/local.yaml")
     container.register_instance(SERVICE_CONFIG_MANAGER, config_manager)
 
     # AppConfig resolves lazily from the manager the first time it's needed.

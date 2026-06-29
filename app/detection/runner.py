@@ -14,15 +14,17 @@ from __future__ import annotations
 
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Callable, Optional
 
 import numpy as np
 
 from app.core.interfaces import CameraSource, DetectorPlugin
 from app.core.logging_config import get_logger
-from app.core.models import Detection
+from app.core.models import Detection, Event
 from app.detection.drawing import draw_detections
+from app.events.engine import EventEngine
 
 logger = get_logger(__name__)
 
@@ -37,6 +39,7 @@ class RunnerResult:
     detections: list[Detection]
     fps: float
     frame_index: int
+    event_count: int = 0         # total events generated so far this run
 
 
 class DetectionRunner:
@@ -50,6 +53,9 @@ class DetectionRunner:
         loop_video: bool = False,
         annotator: Annotator = draw_detections,
         class_filter: frozenset[str] | None = None,
+        event_engine: EventEngine | None = None,
+        profile_id: str = "",
+        screenshot_dir: str | None = None,
     ) -> None:
         self._source = source
         self._detector = detector
@@ -58,11 +64,16 @@ class DetectionRunner:
         # When set, only detections whose label is in the set are kept. This
         # is how an industry profile focuses detection on relevant objects.
         self._class_filter = class_filter
+        self._event_engine = event_engine
+        self._profile_id = profile_id
+        self._screenshot_dir = screenshot_dir
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._lock = threading.Lock()
         self._latest: Optional[RunnerResult] = None
         self._error: Optional[str] = None
+        self._event_buffer: list[Event] = []
+        self._event_total = 0
 
     # -- lifecycle -----------------------------------------------------------
     def start(self) -> None:
@@ -92,6 +103,13 @@ class DetectionRunner:
     def latest(self) -> Optional[RunnerResult]:
         with self._lock:
             return self._latest
+
+    def drain_events(self) -> list[Event]:
+        """Return newly generated events and clear the buffer (UI polls this)."""
+        with self._lock:
+            events = self._event_buffer
+            self._event_buffer = []
+            return events
 
     # -- loop ----------------------------------------------------------------
     def _run(self) -> None:
@@ -132,11 +150,36 @@ class DetectionRunner:
                 if dt > 0:
                     fps = 0.9 * fps + 0.1 * (1.0 / dt)
 
+                if self._event_engine is not None:
+                    events = self._event_engine.evaluate(
+                        self._source.camera_id, self._profile_id, detections, now)
+                    if events:
+                        events = [self._with_screenshot(e, annotated) for e in events]
+                        with self._lock:
+                            self._event_buffer.extend(events)
+                            self._event_total += len(events)
+
                 with self._lock:
                     self._latest = RunnerResult(
                         image=annotated, detections=detections,
                         fps=fps, frame_index=frame.frame_index,
+                        event_count=self._event_total,
                     )
         finally:
             self._source.release()
             logger.debug("Runner loop ended")
+
+    def _with_screenshot(self, event: Event, annotated: np.ndarray) -> Event:
+        """Save the annotated frame for an event and attach its path."""
+        if not self._screenshot_dir:
+            return event
+        try:
+            import cv2
+            out_dir = Path(self._screenshot_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            path = out_dir / f"{event.event_type}_{int(event.timestamp)}_{event.event_id[:8]}.jpg"
+            cv2.imwrite(str(path), annotated)
+            return replace(event, screenshot_path=str(path))
+        except Exception as exc:  # noqa: BLE001 - screenshot is best-effort
+            logger.warning("Could not save event screenshot: %s", exc)
+            return event

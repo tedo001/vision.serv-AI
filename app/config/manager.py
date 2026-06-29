@@ -24,18 +24,49 @@ from app.core.logging_config import get_logger
 logger = get_logger(__name__)
 
 DEFAULT_CONFIG_PATH = Path("config/default.yaml")
+DEFAULT_OVERRIDES_PATH = Path("config/local.yaml")
+
+
+def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge ``overlay`` onto ``base`` (overlay wins)."""
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 class ConfigManager:
-    """Owns loading, validation, and access of application configuration."""
+    """Owns loading, validation, and access of application configuration.
 
-    def __init__(self, config_path: Path | str = DEFAULT_CONFIG_PATH) -> None:
+    Layering: the committed ``config_path`` (default.yaml) is the documented
+    baseline; runtime changes are written to ``overrides_path`` (local.yaml,
+    gitignored) and merged on top at load time. This keeps the documented
+    template — and its comments — pristine while user edits persist separately.
+    When ``overrides_path`` is None, the manager reads and writes a single file
+    (used by tests).
+    """
+
+    def __init__(
+        self,
+        config_path: Path | str = DEFAULT_CONFIG_PATH,
+        *,
+        overrides_path: Path | str | None = None,
+    ) -> None:
         self._config_path = Path(config_path)
+        self._overrides_path = Path(overrides_path) if overrides_path else None
         self._config: AppConfig | None = None
 
     @property
     def config_path(self) -> Path:
         return self._config_path
+
+    @property
+    def _save_path(self) -> Path:
+        """Where runtime changes are written."""
+        return self._overrides_path or self._config_path
 
     @property
     def config(self) -> AppConfig:
@@ -46,31 +77,37 @@ class ConfigManager:
         return self._config
 
     def load(self) -> AppConfig:
-        """Load and validate config from disk, or fall back to defaults."""
-        if not self._config_path.exists():
+        """Load, merge overrides, and validate config; fall back to defaults."""
+        data = self._read_yaml(self._config_path)
+        if data is None:
             logger.warning(
                 "Config file %s not found; using built-in defaults.",
                 self._config_path,
             )
-            self._config = AppConfig()
-            return self._config
+            data = {}
 
-        try:
-            raw = self._config_path.read_text(encoding="utf-8")
-            data: Any = yaml.safe_load(raw) or {}
-        except (OSError, yaml.YAMLError) as exc:
-            raise ConfigError(
-                f"Failed to read/parse config at {self._config_path}: {exc}"
-            ) from exc
+        if self._overrides_path is not None:
+            overrides = self._read_yaml(self._overrides_path)
+            if overrides:
+                data = _deep_merge(data, overrides)
+                logger.info("Applied config overrides from %s", self._overrides_path)
 
         self._config = AppConfig.from_dict(data)
         logger.info(
-            "Loaded configuration for product %r (profile=%s) from %s",
+            "Loaded configuration for product %r (profile=%s)",
             self._config.product_name,
             self._config.active_profile,
-            self._config_path,
         )
         return self._config
+
+    def _read_yaml(self, path: Path) -> dict[str, Any] | None:
+        """Read a YAML file to a dict, or None if missing."""
+        if not path.exists():
+            return None
+        try:
+            return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError) as exc:
+            raise ConfigError(f"Failed to read/parse config at {path}: {exc}") from exc
 
     def reload(self) -> AppConfig:
         """Force a re-read from disk (supports future hot-reload)."""
@@ -78,20 +115,25 @@ class ConfigManager:
         return self.load()
 
     def save(self, config: AppConfig | None = None) -> None:
-        """Persist ``config`` (or the loaded one) back to the YAML file."""
+        """Persist ``config`` (or the loaded one) to the save path.
+
+        Writes to the overrides file when configured, leaving the committed
+        default template untouched.
+        """
         target = config if config is not None else self.config
-        self._config_path.parent.mkdir(parents=True, exist_ok=True)
+        save_path = self._save_path
+        save_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            self._config_path.write_text(
+            save_path.write_text(
                 yaml.safe_dump(target.to_dict(), sort_keys=False, default_flow_style=False),
                 encoding="utf-8",
             )
         except OSError as exc:
             raise ConfigError(
-                f"Failed to write config to {self._config_path}: {exc}"
+                f"Failed to write config to {save_path}: {exc}"
             ) from exc
         self._config = target
-        logger.info("Saved configuration to %s", self._config_path)
+        logger.info("Saved configuration to %s", save_path)
 
     def set_active_profile(self, profile_key: str) -> AppConfig:
         """Persist ``profile_key`` as the active profile."""

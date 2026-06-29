@@ -1,16 +1,16 @@
 # ============================================================================
-# AI Vision Platform - Default Configuration
+# AI Vision Platform - Default Configuration (committed template)
 # ----------------------------------------------------------------------------
-# This file is the single source of runtime configuration. It is loaded and
-# validated at startup into a typed AppConfig object (app/config/settings.py).
-# Rename the product, switch profiles, or tune inference here -- no code edits.
+# This file is the documented baseline. Runtime changes made in the UI are
+# written to config/local.yaml (gitignored) and layered on top of this file,
+# so your edits and comments here are never overwritten.
 # ============================================================================
 
 # Product identity. Change this single value to rebrand the application.
 product_name: "AI Vision Platform"
 
 # Which industry profile is active on launch. Profiles bundle the AI modules,
-# rules, dashboard, and alert policies for a vertical (Phase 6).
+# rules, dashboard, and alert policies for a vertical.
 active_profile: "construction"
 
 # Persistence and output locations.
@@ -40,7 +40,7 @@ detection:
   active_model: "yolo26n"  # yolo11n | yolo26n | yolo26x (see model catalog)
   enabled: false         # when true, the selected model runs on detection
 
-# Defaults applied to every camera unless overridden per-camera (Phase 7).
+# Defaults applied to every camera unless overridden per-camera.
 camera:
   reconnect_seconds: 5.0
   target_fps: 25

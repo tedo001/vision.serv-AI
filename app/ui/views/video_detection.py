@@ -14,6 +14,7 @@ the main thread; all capture/inference happens on the runner thread.
 from __future__ import annotations
 
 import tkinter as tk
+from dataclasses import replace
 from tkinter import filedialog, ttk
 
 from app.camera.diagnostics import list_cameras
@@ -21,13 +22,16 @@ from app.camera.opencv_source import OpenCVCameraSource
 from app.config.settings import AppConfig
 from app.core.device import cuda_available, gpu_info, resolve_device
 from app.core.logging_config import get_logger
-from app.core.models import CameraSourceType
+from app.core.models import Alert, CameraSourceType, Event, EventSeverity
+from app.database.sqlite_sink import SqliteEventSink
 from app.detection.model_catalog import get_model
 from app.detection.model_manager import build_detector
 from app.detection.null_detector import NullDetector
 from app.detection.runner import DetectionRunner
+from app.events.engine import EventEngine
 from app.profiles.catalog import get_profile
 from app.profiles.engine import relevant_classes
+from app.ui.state import DetectionStats
 from app.ui.state import AppState, ConnectionStatus
 from app.ui.theme import PALETTE
 from app.ui.views.base import BaseView
@@ -52,6 +56,8 @@ class VideoDetectionView(BaseView):
         self._runner: DetectionRunner | None = None
         self._poll_job: str | None = None
         self._photo = None  # keep a ref so Tk doesn't GC the image
+        self._event_sink: SqliteEventSink | None = None
+        self._events_today = 0
         super().__init__(parent, state)
 
     # -- layout --------------------------------------------------------------
@@ -209,8 +215,17 @@ class VideoDetectionView(BaseView):
             if self._filter_profile.get():
                 classes = relevant_classes(self.state.active_profile.value)
                 class_filter = classes or None  # empty profile -> show all
-        self._runner = DetectionRunner(source, detector, loop_video=loop_video,
-                                       class_filter=class_filter)
+
+        # Detection runs generate events to the DB and the UI; preview does not.
+        event_engine = None
+        if not self._preview_only.get():
+            event_engine = EventEngine(sinks=(self._ensure_sink(),))
+        self._runner = DetectionRunner(
+            source, detector, loop_video=loop_video, class_filter=class_filter,
+            event_engine=event_engine,
+            profile_id=self.state.active_profile.value,
+            screenshot_dir=self._config.screenshot_dir,
+        )
         self._runner.start()
 
         self._toggle_btn.configure(text="■  Turn Camera Off")
@@ -283,9 +298,17 @@ class VideoDetectionView(BaseView):
         if result is not None:
             self._render(result.image)
             self.state.fps.set(result.fps)
+            self.state.stats.set(DetectionStats(
+                active_cameras=1, total_cameras=1,
+                events_today=self._events_today,
+                active_alerts=len(self.state.alerts.value),
+                detections_per_second=result.fps,
+            ))
             self._stats.configure(
                 text=f"FPS {result.fps:5.1f}   •   {len(result.detections)} objects"
-                     f"   •   frame {result.frame_index}")
+                     f"   •   {result.event_count} events   •   frame {result.frame_index}")
+
+        self._ingest_events(runner.drain_events())
 
         if not runner.is_running and result is None:
             # source ended before producing frames
@@ -294,6 +317,28 @@ class VideoDetectionView(BaseView):
             return
 
         self._poll_job = self.after(_POLL_MS, self._poll)
+
+    def _ensure_sink(self) -> SqliteEventSink:
+        if self._event_sink is None:
+            self._event_sink = SqliteEventSink(self._config.database_path)
+            self._events_today = self._event_sink.count_today()
+        return self._event_sink
+
+    def _ingest_events(self, events: list[Event]) -> None:
+        """Merge newly generated events into the shared UI state (main thread)."""
+        if not events:
+            return
+        self._events_today += len(events)
+        # Newest first for display; cap history kept in memory.
+        newest_first = tuple(reversed(events))
+        self.state.events.set((newest_first + self.state.events.value)[:200])
+
+        alerts = [Alert(event=e, play_sound=True, requires_acknowledgement=True)
+                  for e in events
+                  if e.severity in (EventSeverity.HIGH, EventSeverity.CRITICAL)]
+        if alerts:
+            self.state.alerts.set((tuple(reversed(alerts)) + self.state.alerts.value)[:50])
+        self.state.status_message.set(events[-1].message)
 
     def _render(self, bgr_image) -> None:
         import cv2
@@ -318,6 +363,8 @@ class VideoDetectionView(BaseView):
         self._toggle_btn.configure(text="▷  Turn Camera On")
         self.state.camera_status.set(ConnectionStatus.OFFLINE)
         self.state.fps.set(0.0)
+        self.state.stats.update(lambda s: replace(s, active_cameras=0,
+                                                  detections_per_second=0.0))
         self.state.status_message.set("Camera off.")
 
     def on_show(self) -> None:
