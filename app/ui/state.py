@@ -36,6 +36,16 @@ class Observable(Generic[T]):
         return self._value
 
     def set(self, value: T) -> None:
+        # Skip notifying subscribers when the value is unchanged. This avoids
+        # redundant UI re-renders from high-frequency producers (e.g. the
+        # per-frame stats stream). Equality is best-effort: if a value type
+        # can't be compared, fall back to always notifying.
+        try:
+            if value == self._value:
+                self._value = value
+                return
+        except Exception:  # noqa: BLE001 - uncomparable type: notify anyway
+            pass
         self._value = value
         self._notify()
 

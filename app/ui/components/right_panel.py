@@ -26,6 +26,10 @@ class RightPanel(ttk.Frame):
                   background=PALETTE.sidebar).pack(anchor="w")
         self._stats_box = ttk.Frame(self, style="Sidebar.TFrame")
         self._stats_box.pack(fill="x", pady=(8, 16))
+        # Build the stat rows once; updates mutate StringVars in place so the
+        # high-frequency stats stream (every frame) never rebuilds widgets,
+        # which is what caused the panel to flicker/"buffer".
+        self._stat_vars = self._build_stat_rows()
 
         ttk.Label(self, text="Active Alerts", style="H2.TLabel",
                   background=PALETTE.sidebar).pack(anchor="w")
@@ -41,23 +45,32 @@ class RightPanel(ttk.Frame):
         state.alerts.subscribe(self._render_alerts)
         state.events.subscribe(self._render_events)
 
-    # -- renderers -----------------------------------------------------------
-    def _render_stats(self, stats: DetectionStats) -> None:
-        for w in self._stats_box.winfo_children():
-            w.destroy()
-        rows = (
-            ("Active cameras", f"{stats.active_cameras}/{stats.total_cameras}"),
-            ("Events today", str(stats.events_today)),
-            ("Active alerts", str(stats.active_alerts)),
-            ("Detections/s", f"{stats.detections_per_second:.1f}"),
-        )
-        for label, value in rows:
+    # -- stats (built once, updated in place) --------------------------------
+    _STAT_ROWS = (
+        ("cameras", "Active cameras"),
+        ("events", "Events today"),
+        ("alerts", "Active alerts"),
+        ("dps", "Detections/s"),
+    )
+
+    def _build_stat_rows(self) -> dict[str, tk.StringVar]:
+        variables: dict[str, tk.StringVar] = {}
+        for key, label in self._STAT_ROWS:
             row = ttk.Frame(self._stats_box, style="Sidebar.TFrame")
             row.pack(fill="x", pady=2)
             ttk.Label(row, text=label, background=PALETTE.sidebar,
                       foreground=PALETTE.text_muted, font=("Segoe UI", 9)).pack(side="left")
-            ttk.Label(row, text=value, background=PALETTE.sidebar,
+            var = tk.StringVar(value="—")
+            variables[key] = var
+            ttk.Label(row, textvariable=var, background=PALETTE.sidebar,
                       foreground=PALETTE.text, font=("Segoe UI Semibold", 9)).pack(side="right")
+        return variables
+
+    def _render_stats(self, stats: DetectionStats) -> None:
+        self._stat_vars["cameras"].set(f"{stats.active_cameras}/{stats.total_cameras}")
+        self._stat_vars["events"].set(str(stats.events_today))
+        self._stat_vars["alerts"].set(str(stats.active_alerts))
+        self._stat_vars["dps"].set(f"{stats.detections_per_second:.1f}")
 
     def _render_alerts(self, alerts: tuple[Alert, ...]) -> None:
         for w in self._alerts_box.winfo_children():

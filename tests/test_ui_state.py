@@ -38,6 +38,17 @@ def test_observable_unsubscribe_stops_updates() -> None:
     assert seen == [1]
 
 
+def test_observable_skips_notify_on_unchanged_value() -> None:
+    """Setting an equal value must not re-fire (prevents stats-panel flicker)."""
+    obs: Observable[int] = Observable(0)
+    seen: list[int] = []
+    obs.subscribe(seen.append, immediate=False)
+    obs.set(5)
+    obs.set(5)   # unchanged -> no notification
+    obs.set(7)
+    assert seen == [5, 7]
+
+
 def test_observable_update_uses_current_value() -> None:
     obs: Observable[int] = Observable(10)
     obs.update(lambda v: v + 5)
