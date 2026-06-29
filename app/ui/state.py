@@ -107,6 +107,14 @@ class AppState:
     gpu_name: Observable[str] = field(default_factory=lambda: Observable("CPU"))
     fps: Observable[float] = field(default_factory=lambda: Observable(0.0))
 
+    # Detection model selection (mirrors config.detection; the engine reads it).
+    active_model: Observable[str] = field(
+        default_factory=lambda: Observable("yolo26n")
+    )
+    model_enabled: Observable[bool] = field(default_factory=lambda: Observable(False))
+    confidence: Observable[float] = field(default_factory=lambda: Observable(0.45))
+    iou: Observable[float] = field(default_factory=lambda: Observable(0.50))
+
     stats: Observable[DetectionStats] = field(
         default_factory=lambda: Observable(DetectionStats())
     )
@@ -121,9 +129,22 @@ class AppState:
     )
 
     @classmethod
-    def from_config(cls, *, product_name: str, active_profile: str) -> "AppState":
+    def from_config(
+        cls,
+        *,
+        product_name: str,
+        active_profile: str,
+        active_model: str = "yolo26n",
+        model_enabled: bool = False,
+        confidence: float = 0.45,
+        iou: float = 0.50,
+    ) -> "AppState":
         """Build initial state seeded from the loaded application config."""
         state = cls()
         state.product_name.set(product_name)
         state.active_profile.set(active_profile)
+        state.active_model.set(active_model)
+        state.model_enabled.set(model_enabled)
+        state.confidence.set(confidence)
+        state.iou.set(iou)
         return state

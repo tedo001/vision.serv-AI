@@ -41,6 +41,7 @@ from app.ui.views.settings import SettingsView
 logger = get_logger(__name__)
 
 # Service keys (mirror main.py to avoid a circular import).
+SERVICE_CONFIG_MANAGER = "config_manager"
 SERVICE_APP_CONFIG = "app_config"
 SERVICE_APP_STATE = "app_state"
 
@@ -54,6 +55,7 @@ class VisionApp:
         self._container = container
         self._config: AppConfig = container.resolve(SERVICE_APP_CONFIG)
         self._state: AppState = container.resolve(SERVICE_APP_STATE)
+        self._config_manager = container.resolve(SERVICE_CONFIG_MANAGER)
 
         self._root = tk.Tk()
         self._root.title(self._config.ui.window_title)
@@ -107,10 +109,31 @@ class VisionApp:
             NavSection.MODULES: lambda p: ModulesView(p, state),
             NavSection.EVENTS: lambda p: EventsView(p, state),
             NavSection.REPORTS: lambda p: ReportsView(p, state),
-            NavSection.SETTINGS: lambda p: SettingsView(p, state, self._config),
+            NavSection.SETTINGS: lambda p: SettingsView(
+                p, state, self._config, on_apply=self._apply_model_settings),
             NavSection.LOGS: lambda p: LogsView(p, state, log_path),
             NavSection.ABOUT: lambda p: AboutView(p, state),
         }
+
+    # -- settings actions ----------------------------------------------------
+    def _apply_model_settings(
+        self, model_key: str, enabled: bool, confidence: float, iou: float
+    ) -> None:
+        """Update live state and persist detection/model settings to YAML."""
+        self._state.active_model.set(model_key)
+        self._state.model_enabled.set(enabled)
+        self._state.confidence.set(confidence)
+        self._state.iou.set(iou)
+        try:
+            self._config = self._config_manager.update_detection(
+                active_model=model_key, enabled=enabled,
+                confidence=confidence, iou=iou,
+            )
+            logger.info("Persisted detection settings (model=%s, enabled=%s)",
+                        model_key, enabled)
+        except Exception as exc:  # noqa: BLE001 - report, don't crash the UI
+            logger.error("Failed to persist detection settings: %s", exc)
+            self._state.status_message.set("Could not save settings to disk")
 
     # -- routing -------------------------------------------------------------
     def _show(self, section: NavSection) -> None:

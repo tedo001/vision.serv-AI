@@ -12,7 +12,7 @@ can be rebranded purely via configuration, per the product requirement.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from app.core.exceptions import ConfigValidationError
@@ -70,12 +70,21 @@ class UIConfig:
 
 @dataclass(frozen=True, slots=True)
 class DetectionConfig:
-    """Global inference defaults; profiles/plugins may override per-module."""
+    """Global inference defaults; profiles/plugins may override per-module.
+
+    ``active_model`` is the selected YOLO backbone key (see
+    :data:`app.detection.model_catalog.MODELS`). ``enabled`` gates whether the
+    detection engine runs the model at all. The model *key* is validated at the
+    detection layer (not here) to keep the config layer free of detection
+    dependencies.
+    """
 
     confidence: float = 0.45
     iou: float = 0.50
     device: str = "auto"  # "auto" | "cpu" | "cuda" | "cuda:0" ...
     model_dir: str = "assets/models"
+    active_model: str = "yolo26n"
+    enabled: bool = False
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "DetectionConfig":
@@ -88,6 +97,8 @@ class DetectionConfig:
             ),
             device=str(data.get("device", "auto")),
             model_dir=str(data.get("model_dir", "assets/models")),
+            active_model=str(data.get("active_model", "yolo26n")),
+            enabled=bool(data.get("enabled", False)),
         )
 
 
@@ -152,3 +163,7 @@ class AppConfig:
             camera=CameraDefaults.from_dict(data.get("camera", {}) or {}),
             alert=AlertConfig.from_dict(data.get("alert", {}) or {}),
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the full config tree to plain dicts for YAML output."""
+        return asdict(self)

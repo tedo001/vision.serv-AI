@@ -91,6 +91,18 @@ main.py        # composition root / entry point
 
 ---
 
+## Detection models
+
+Choose the YOLO backbone from **Settings → AI Detection Model**: `YOLO11 Nano`
+(fast/edge), `YOLO26 Nano` (newest, NMS-free), or `YOLO26 X-Large` (highest
+accuracy, GPU recommended). Toggle **Enable for detection** and tune the
+confidence / IoU thresholds; **Apply & Save** updates the live state and
+persists to `config/default.yaml`. Weights auto-download from Ultralytics on
+first use. The selection is consumed by `YoloDetector` (which implements the
+core `DetectorPlugin` port); the live camera→detector pipeline is wired in
+Phases 7–8. Add a model by appending one entry to
+`app/detection/model_catalog.py`.
+
 ## Configuration
 
 All runtime configuration lives in `config/default.yaml`, loaded and

@@ -48,6 +48,10 @@ def build_container() -> Container:
         lambda c: AppState.from_config(
             product_name=c.resolve(SERVICE_APP_CONFIG).product_name,
             active_profile=c.resolve(SERVICE_APP_CONFIG).active_profile,
+            active_model=c.resolve(SERVICE_APP_CONFIG).detection.active_model,
+            model_enabled=c.resolve(SERVICE_APP_CONFIG).detection.enabled,
+            confidence=c.resolve(SERVICE_APP_CONFIG).detection.confidence,
+            iou=c.resolve(SERVICE_APP_CONFIG).detection.iou,
         ),
     )
     return container

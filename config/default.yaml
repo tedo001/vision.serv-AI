@@ -37,6 +37,8 @@ detection:
   iou: 0.50              # NMS IoU threshold [0-1]
   device: "auto"         # auto | cpu | cuda | cuda:0
   model_dir: "assets/models"
+  active_model: "yolo26n"  # yolo11n | yolo26n | yolo26x (see model catalog)
+  enabled: false         # when true, the selected model runs on detection
 
 # Defaults applied to every camera unless overridden per-camera (Phase 7).
 camera:

@@ -11,12 +11,13 @@ trivially registered as a singleton in the DI container. No global state.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from app.config.settings import AppConfig
+from app.config.settings import AppConfig, DetectionConfig
 from app.core.exceptions import ConfigError
 from app.core.logging_config import get_logger
 
@@ -75,3 +76,47 @@ class ConfigManager:
         """Force a re-read from disk (supports future hot-reload)."""
         self._config = None
         return self.load()
+
+    def save(self, config: AppConfig | None = None) -> None:
+        """Persist ``config`` (or the loaded one) back to the YAML file."""
+        target = config if config is not None else self.config
+        self._config_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self._config_path.write_text(
+                yaml.safe_dump(target.to_dict(), sort_keys=False, default_flow_style=False),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            raise ConfigError(
+                f"Failed to write config to {self._config_path}: {exc}"
+            ) from exc
+        self._config = target
+        logger.info("Saved configuration to %s", self._config_path)
+
+    def update_detection(
+        self,
+        *,
+        active_model: str | None = None,
+        enabled: bool | None = None,
+        confidence: float | None = None,
+        iou: float | None = None,
+    ) -> AppConfig:
+        """Apply detection/model changes and persist them.
+
+        Only provided fields are changed. Returns the new config. Validation
+        of numeric ranges is enforced by ``DetectionConfig.from_dict`` via a
+        round-trip so invalid values are rejected before they are saved.
+        """
+        current = self.config.detection
+        merged = {
+            "confidence": current.confidence if confidence is None else confidence,
+            "iou": current.iou if iou is None else iou,
+            "device": current.device,
+            "model_dir": current.model_dir,
+            "active_model": current.active_model if active_model is None else active_model,
+            "enabled": current.enabled if enabled is None else enabled,
+        }
+        new_detection: DetectionConfig = DetectionConfig.from_dict(merged)
+        new_config = replace(self.config, detection=new_detection)
+        self.save(new_config)
+        return new_config
