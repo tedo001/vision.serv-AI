@@ -13,7 +13,11 @@ from app.config.manager import ConfigManager
 from app.core.exceptions import DetectionError
 from app.detection.downloader import download_model, is_downloaded, weights_path
 from app.detection.model_catalog import MODELS, get_model, is_known_model
-from app.detection.model_manager import available_models, build_detector
+from app.detection.model_manager import (
+    available_models,
+    build_detector,
+    discover_custom_models,
+)
 from app.detection.yolo_detector import YoloDetector
 
 
@@ -76,6 +80,38 @@ def test_download_is_noop_when_already_present(tmp_path: Path) -> None:
     target.write_bytes(b"x")
     # Must not import/download anything when the file already exists.
     assert download_model(info, tmp_path) == target
+
+
+# --- custom model discovery -------------------------------------------------
+def test_discover_custom_models_registers_and_is_selectable(tmp_path: Path) -> None:
+    (tmp_path / "safety_v1.pt").write_bytes(b"x")
+    (tmp_path / "guard-pose.pt").write_bytes(b"x")
+    (tmp_path / "yolo26n.pt").write_bytes(b"x")  # built-in weights -> ignored
+    (tmp_path / "notes.txt").write_text("ignore me")
+
+    try:
+        found = discover_custom_models(tmp_path)
+        keys = {m.key for m in found}
+        assert keys == {"custom:safety_v1", "custom:guard-pose"}
+        # Task inferred from filename.
+        tasks = {m.key: m.task for m in found}
+        assert tasks["custom:guard-pose"] == "pose"
+        assert tasks["custom:safety_v1"] == "detect"
+        # Selectable like any model, and usable by build_detector.
+        assert is_known_model("custom:safety_v1")
+        from app.config.manager import ConfigManager
+        cfg = ConfigManager(tmp_path / "c.yaml")
+        cfg.load()
+        cfg.update_detection(active_model="custom:safety_v1")
+        det = build_detector(cfg.config)
+        assert det.name == "custom:safety_v1"
+    finally:
+        for key in ("custom:safety_v1", "custom:guard-pose"):
+            MODELS.pop(key, None)
+
+
+def test_discover_missing_dir_returns_empty(tmp_path: Path) -> None:
+    assert discover_custom_models(tmp_path / "nope") == []
 
 
 # --- detector ---------------------------------------------------------------

@@ -91,6 +91,28 @@ main.py        # composition root / entry point
 
 ---
 
+## Training a custom model (detect YOUR incidents)
+
+Generic models (COCO objects, pose) cannot detect helmet violations, fire, or
+workplace accidents — those need a model **trained on labeled data**. The
+pipeline:
+
+1. Build a labeled dataset (YOLO format) — see [`datasets/README.md`](datasets/README.md)
+   and the sample [`datasets/safety/data.yaml`](datasets/safety/data.yaml).
+2. Train / fine-tune:
+   ```bash
+   # Smoke-test the pipeline on a tiny bundled dataset (downloads itself):
+   python -m tools.train --data coco8.yaml --base yolo11n.pt --epochs 2
+   # Train on your data:
+   python -m tools.train --data datasets/safety/data.yaml --base yolo11n.pt \
+       --epochs 100 --name safety_v1
+   ```
+3. The best weights are copied to `assets/models/safety_v1.pt` and appear in
+   **Settings → AI Detection Model** as **"Custom — safety_v1"** (auto-discovered
+   at startup). Select it, Apply, and run Video Detection.
+
+A GPU is recommended for real datasets; CPU is fine for smoke tests.
+
 ## Pose & action detection (incidents)
 
 Object detection finds *that* a person is present; **action detection** finds

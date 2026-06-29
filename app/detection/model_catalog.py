@@ -93,8 +93,17 @@ DEFAULT_MODEL_KEY = "yolo26n"
 
 def get_model(key: str) -> ModelInfo | None:
     """Return the model info for ``key`` (case-insensitive), or None."""
-    return MODELS.get(key.lower())
+    return MODELS.get(key.lower()) or MODELS.get(key)
 
 
 def is_known_model(key: str) -> bool:
-    return key.lower() in MODELS
+    return key.lower() in MODELS or key in MODELS
+
+
+def register_model(info: ModelInfo) -> None:
+    """Add (or replace) a model in the catalog at runtime.
+
+    Used to surface custom-trained weights discovered in the model directory
+    so they are selectable exactly like the built-in models.
+    """
+    MODELS[info.key] = info

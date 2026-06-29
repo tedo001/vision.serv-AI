@@ -46,3 +46,11 @@ assets/models/*
 
 # Local config overrides
 config/local.yaml
+
+# Training artifacts and datasets (large, project-specific). Keep the
+# scaffolding (README + sample data.yaml) but ignore actual data and runs.
+runs/
+datasets/**
+!datasets/README.md
+!datasets/safety/
+!datasets/safety/data.yaml

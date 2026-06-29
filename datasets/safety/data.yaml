@@ -1,0 +1,21 @@
+# Example dataset config for a construction-safety model.
+# Copy this, point the paths at your labeled images, and adjust `names`.
+# Train with:
+#   python -m tools.train --data datasets/safety/data.yaml --base yolo11n.pt --epochs 100
+
+# Paths are relative to this file's directory (or absolute).
+path: .                 # dataset root
+train: images/train     # train images (relative to 'path')
+val: images/val         # validation images
+
+# Classes the model will learn to detect. The index is the class_id used in
+# the label .txt files. Edit to match what you annotate.
+names:
+  0: person
+  1: helmet
+  2: no_helmet
+  3: safety_vest
+  4: no_vest
+  5: person_fallen
+  6: fire
+  7: smoke

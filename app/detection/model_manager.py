@@ -8,14 +8,51 @@ from config/state and nowhere else.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.config.settings import AppConfig
-from app.detection.model_catalog import MODELS, ModelInfo
+from app.core.logging_config import get_logger
+from app.detection.model_catalog import MODELS, ModelInfo, register_model
 from app.detection.yolo_detector import YoloDetector
+
+logger = get_logger(__name__)
 
 
 def available_models() -> tuple[ModelInfo, ...]:
     """All selectable models, in catalog order."""
     return tuple(MODELS.values())
+
+
+def discover_custom_models(model_dir: str | Path) -> list[ModelInfo]:
+    """Register any custom .pt weights found in ``model_dir`` as selectable models.
+
+    Lets trained weights (e.g. produced by tools/train.py) appear in the model
+    picker without code changes. A filename containing "pose" is treated as a
+    pose model; everything else as object detection.
+    """
+    directory = Path(model_dir)
+    if not directory.is_dir():
+        return []
+    known_weights = {m.weights for m in MODELS.values()}
+    discovered: list[ModelInfo] = []
+    for path in sorted(directory.glob("*.pt")):
+        if path.name in known_weights:
+            continue  # a built-in model's weights, not a custom one
+        info = ModelInfo(
+            key=f"custom:{path.stem}",
+            display_name=f"Custom — {path.stem}",
+            weights=path.name,
+            family="Custom",
+            size_label="—",
+            profile="custom",
+            approx_size_mb=max(1, path.stat().st_size // (1024 * 1024)),
+            description=f"Custom-trained weights ({path.name}).",
+            task="pose" if "pose" in path.stem.lower() else "detect",
+        )
+        register_model(info)
+        discovered.append(info)
+        logger.info("Registered custom model %s", info.key)
+    return discovered
 
 
 def build_detector(

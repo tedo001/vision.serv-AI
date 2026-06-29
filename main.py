@@ -73,8 +73,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     logger = get_logger(__name__)
 
+    # Surface any custom-trained weights in assets/models as selectable models.
+    from app.detection.model_manager import discover_custom_models
+    custom = discover_custom_models(config.detection.model_dir)
+
     logger.info("=" * 64)
     logger.info("%s  v%s  starting up", config.product_name, __version__)
+    if custom:
+        logger.info("Custom models available: %s",
+                    ", ".join(m.display_name for m in custom))
     logger.info("Active profile : %s", config.active_profile)
     logger.info("Inference device: %s", config.detection.device)
     logger.info("UI theme       : %s", config.ui.theme)
