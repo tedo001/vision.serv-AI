@@ -15,6 +15,7 @@ class NavSection(str, Enum):
     DASHBOARD = "dashboard"
     PROFILES = "profiles"
     CAMERAS = "cameras"
+    VIDEO_DETECTION = "video_detection"
     MODULES = "modules"
     EVENTS = "events"
     REPORTS = "reports"
@@ -35,6 +36,7 @@ NAV_ITEMS: tuple[NavItem, ...] = (
     NavItem(NavSection.DASHBOARD, "Dashboard", "▦"),     # ▦
     NavItem(NavSection.PROFILES, "Industry Profiles", "▣"),  # ▣
     NavItem(NavSection.CAMERAS, "Cameras", "▶"),         # ▶
+    NavItem(NavSection.VIDEO_DETECTION, "Video Detection", "▷"),  # ▷
     NavItem(NavSection.MODULES, "AI Modules", "⚙"),      # ⚙
     NavItem(NavSection.EVENTS, "Events", "⚠"),           # ⚠
     NavItem(NavSection.REPORTS, "Reports", "▤"),         # ▤

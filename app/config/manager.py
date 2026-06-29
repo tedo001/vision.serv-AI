@@ -100,6 +100,7 @@ class ConfigManager:
         enabled: bool | None = None,
         confidence: float | None = None,
         iou: float | None = None,
+        device: str | None = None,
     ) -> AppConfig:
         """Apply detection/model changes and persist them.
 
@@ -111,7 +112,7 @@ class ConfigManager:
         merged = {
             "confidence": current.confidence if confidence is None else confidence,
             "iou": current.iou if iou is None else iou,
-            "device": current.device,
+            "device": current.device if device is None else device,
             "model_dir": current.model_dir,
             "active_model": current.active_model if active_model is None else active_model,
             "enabled": current.enabled if enabled is None else enabled,

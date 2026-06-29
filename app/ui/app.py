@@ -37,6 +37,7 @@ from app.ui.views.modules import ModulesView
 from app.ui.views.profiles import ProfilesView
 from app.ui.views.reports import ReportsView
 from app.ui.views.settings import SettingsView
+from app.ui.views.video_detection import VideoDetectionView
 
 logger = get_logger(__name__)
 
@@ -70,6 +71,7 @@ class VisionApp:
         self._build_layout()
         self._register_views()
         self._show(NavSection.DASHBOARD)
+        self._probe_device_async()
         self._state.status_message.set(
             f"{self._config.product_name} ready — select a profile to begin."
         )
@@ -106,6 +108,7 @@ class VisionApp:
             NavSection.DASHBOARD: lambda p: DashboardView(p, state),
             NavSection.PROFILES: lambda p: ProfilesView(p, state),
             NavSection.CAMERAS: lambda p: CamerasView(p, state),
+            NavSection.VIDEO_DETECTION: lambda p: VideoDetectionView(p, state, self._config),
             NavSection.MODULES: lambda p: ModulesView(p, state),
             NavSection.EVENTS: lambda p: EventsView(p, state),
             NavSection.REPORTS: lambda p: ReportsView(p, state),
@@ -115,9 +118,33 @@ class VisionApp:
             NavSection.ABOUT: lambda p: AboutView(p, state),
         }
 
+    # -- device probe --------------------------------------------------------
+    def _probe_device_async(self) -> None:
+        """Detect GPU off the UI thread (torch import is slow); update state.
+
+        Marshals the result back onto the Tk main loop via ``after`` so we
+        never touch widget state from a worker thread.
+        """
+        import threading
+
+        def worker() -> None:
+            from app.core.device import gpu_info
+            available, name = gpu_info()
+            self._root.after(0, lambda: self._apply_device_state(available, name))
+
+        threading.Thread(target=worker, name="device-probe", daemon=True).start()
+
+    def _apply_device_state(self, available: bool, name: str) -> None:
+        from app.ui.state import ConnectionStatus
+        self._state.gpu_status.set(
+            ConnectionStatus.ONLINE if available else ConnectionStatus.OFFLINE)
+        self._state.gpu_name.set(name)
+        logger.info("Compute device: %s", name)
+
     # -- settings actions ----------------------------------------------------
     def _apply_model_settings(
-        self, model_key: str, enabled: bool, confidence: float, iou: float
+        self, model_key: str, enabled: bool, confidence: float, iou: float,
+        device: str,
     ) -> None:
         """Update live state and persist detection/model settings to YAML."""
         self._state.active_model.set(model_key)
@@ -127,7 +154,7 @@ class VisionApp:
         try:
             self._config = self._config_manager.update_detection(
                 active_model=model_key, enabled=enabled,
-                confidence=confidence, iou=iou,
+                confidence=confidence, iou=iou, device=device,
             )
             logger.info("Persisted detection settings (model=%s, enabled=%s)",
                         model_key, enabled)

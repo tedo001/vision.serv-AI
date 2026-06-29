@@ -91,6 +91,24 @@ main.py        # composition root / entry point
 
 ---
 
+## Video Detection (live)
+
+The **Video Detection** tab runs the active model on a live source and draws
+bounding boxes in real time:
+
+- **Source:** laptop / USB camera (index `0` is the built-in cam) or a video
+  file (`.mp4/.avi/.mov/.mkv/.webm`).
+- **Device:** Auto / CPU / GPU. "Auto" picks CUDA when available, else CPU;
+  GPU falls back to CPU automatically if no CUDA device is present. Detected
+  GPU name shows in the top bar.
+- Press **Start** to stream annotated frames; **Stop** to end.
+
+Under the hood: an OpenCV `CameraSource` and a `YoloDetector` are handed to a
+background `DetectionRunner` (capture → detect → annotate); the UI polls the
+runner's latest frame on the Tk event loop. Capture/inference never touch the
+GUI thread. This is the Phase 7–8 vertical slice; multi-camera management and
+the event pipeline build on these same pieces.
+
 ## Detection models
 
 Choose the YOLO backbone from **Settings → AI Detection Model**: `YOLO11 Nano`

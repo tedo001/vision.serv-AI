@@ -18,17 +18,24 @@ def available_models() -> tuple[ModelInfo, ...]:
     return tuple(MODELS.values())
 
 
-def build_detector(config: AppConfig) -> YoloDetector:
+def build_detector(
+    config: AppConfig,
+    *,
+    model_override: str | None = None,
+    device_override: str | None = None,
+) -> YoloDetector:
     """Construct (but do not load) a detector from the active config.
 
-    The caller invokes :meth:`YoloDetector.load` when ready, since loading may
+    ``model_override`` / ``device_override`` let a caller (e.g. the Video
+    Detection tab) try a model or device without changing saved config. The
+    caller invokes :meth:`YoloDetector.load` when ready, since loading may
     download weights and allocate GPU memory.
     """
     det = config.detection
     return YoloDetector(
-        det.active_model,
+        model_override or det.active_model,
         confidence=det.confidence,
         iou=det.iou,
-        device=det.device,
+        device=device_override or det.device,
         model_dir=det.model_dir,
     )

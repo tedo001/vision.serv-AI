@@ -26,8 +26,11 @@ from app.ui.widgets import section_title
 
 logger = get_logger(__name__)
 
-# (active_model, enabled, confidence, iou)
-ApplyModelsCallback = Callable[[str, bool, float, float], None]
+# (active_model, enabled, confidence, iou, device)
+ApplyModelsCallback = Callable[[str, bool, float, float, str], None]
+
+_DEVICE_CHOICES = {"Auto": "auto", "CPU": "cpu", "GPU": "cuda"}
+_DEVICE_LABELS = {v: k for k, v in _DEVICE_CHOICES.items()}
 
 
 class SettingsView(BaseView):
@@ -82,6 +85,13 @@ class SettingsView(BaseView):
         ttk.Checkbutton(row1, text="Enable for detection",
                         variable=self._enabled_var, takefocus=False).pack(side="left")
 
+        ttk.Label(row1, text="Device", style="SurfaceMuted.TLabel").pack(
+            side="left", padx=(16, 4))
+        self._device_cb = ttk.Combobox(row1, values=list(_DEVICE_CHOICES),
+                                       state="readonly", width=7)
+        self._device_cb.set(_DEVICE_LABELS.get(self._config.detection.device, "Auto"))
+        self._device_cb.pack(side="left")
+
         # Threshold sliders
         self._conf_var = tk.DoubleVar(value=self.state.confidence.value)
         self._iou_var = tk.DoubleVar(value=self.state.iou.value)
@@ -125,11 +135,12 @@ class SettingsView(BaseView):
         enabled = bool(self._enabled_var.get())
         conf = round(float(self._conf_var.get()), 2)
         iou = round(float(self._iou_var.get()), 2)
-        logger.info("Apply model settings: model=%s enabled=%s conf=%.2f iou=%.2f",
-                    model_key, enabled, conf, iou)
+        device = _DEVICE_CHOICES[self._device_cb.get()]
+        logger.info("Apply model settings: model=%s enabled=%s conf=%.2f iou=%.2f dev=%s",
+                    model_key, enabled, conf, iou, device)
 
         if self._on_apply is not None:
-            self._on_apply(model_key, enabled, conf, iou)
+            self._on_apply(model_key, enabled, conf, iou, device)
         else:  # standalone fallback: update live state only
             self.state.active_model.set(model_key)
             self.state.model_enabled.set(enabled)
