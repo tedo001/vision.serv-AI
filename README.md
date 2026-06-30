@@ -91,6 +91,28 @@ main.py        # composition root / entry point
 
 ---
 
+## Multiple models at once
+
+Detection can run **several models together** — e.g. a fast object model + a
+pose model for falls + a fine-tuned PPE model. In **Settings → AI Detection
+Model**, multi-select the models in the list (and tick **Track (ByteTrack)**
+for stable IDs across frames). They run as a `CompositeDetector`; each
+detection is tagged with the model that produced it. The catalog includes
+detect (YOLO11/26 n/s/m/x), **pose**, **segment** (YOLO-seg), **RT-DETR**, and
+**SAM2** (experimental) variants. PPE/fire models appear automatically once you
+drop trained `.pt` weights into `assets/models/`.
+
+## Rule engine (custom Python)
+
+Models say *what* is present; **rules** decide *what's an incident*. A rule is a
+plain Python callable that inspects a `RuleContext` (detections, tracks, frame
+size, profile) and returns `RuleResult`s, which the engine debounces and turns
+into events/alerts. Built-ins: PPE (no-helmet/vest), fire/smoke, max-occupancy,
+restricted-zone. **Add your own** by dropping a `.py` file in [`rules/`](rules/)
+exposing a `RULES = [...]` list (see `rules/example_loitering.py`) — auto-loaded
+at startup, no core changes. Rules that key off specific labels (helmet, fire)
+stay inert until a model that emits those labels is running.
+
 ## Training a custom model (detect YOUR incidents)
 
 Generic models (COCO objects, pose) cannot detect helmet violations, fire, or
@@ -223,11 +245,11 @@ Built incrementally; each phase is reviewed before the next begins.
 | 6 | Industry profile system | ◐ engine + detection focus (rules/dashboards pending) |
 | 7 | Camera manager | ◐ capture works (multi-cam mgmt pending) |
 | 8 | Detection engine | ◐ runner + YOLO + event generation (multi-cam pending) |
-| 9 | Tracking / actions | ◐ pose skeleton + fall detection (full tracking pending) |
+| 9 | Tracking / actions | ◐ ByteTrack IDs + pose skeleton + fall detection |
 | 10 | Event engine | ✅ debounced events + sinks + screenshots |
 | 11 | Database | ◐ SQLite events store (other tables pending) |
 | 12 | Reports | ◐ generate + list (DB aggregation pending) |
-| 13 | Alert system | ◐ alerts from high-severity events (policies/sound pending) |
+| 13 | Alert system | ◐ alerts from high-severity events + rule engine (sound pending) |
 | 14 | Optimization | ☐ |
 
 ---

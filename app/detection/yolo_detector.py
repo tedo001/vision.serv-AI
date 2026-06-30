@@ -35,6 +35,8 @@ class YoloDetector:
         iou: float = 0.50,
         device: str = "auto",
         model_dir: str = "assets/models",
+        track: bool = False,
+        tracker: str = "bytetrack.yaml",
     ) -> None:
         info = get_model(model_key)
         if info is None:
@@ -44,6 +46,10 @@ class YoloDetector:
         self._iou = iou
         self._device = None if device == "auto" else device
         self._model_dir = model_dir
+        # ByteTrack-style tracking gives stable IDs across frames (enables
+        # rules like loitering / zone dwell). Not used for SAM.
+        self._track = track and info.loader != "sam"
+        self._tracker = tracker
         self._model = None  # lazily loaded ultralytics model
 
     @property
@@ -59,12 +65,13 @@ class YoloDetector:
         if self._model is not None:
             return
         try:
-            from ultralytics import YOLO  # deferred heavy import
+            loader = self._load_class()
         except ImportError as exc:
             raise DetectionError(
                 "ultralytics is not installed. Run 'pip install ultralytics' "
                 "to enable model-based detection."
             ) from exc
+        YOLO = loader  # noqa: N806 - the resolved model class
 
         weights_path = f"{self._model_dir}/{self._info.weights}"
         try:
@@ -83,18 +90,33 @@ class YoloDetector:
                 ) from exc
         logger.info("Loaded detection model: %s", self._info.display_name)
 
+    def _load_class(self):
+        """Return the Ultralytics model class for this model's loader."""
+        if self._info.loader == "rtdetr":
+            from ultralytics import RTDETR
+            return RTDETR
+        if self._info.loader == "sam":
+            from ultralytics import SAM
+            return SAM
+        from ultralytics import YOLO
+        return YOLO
+
     def detect(self, frame: Frame) -> list[Detection]:
         """Run inference on one frame and map results to ``Detection``s."""
         if self._model is None:
             raise DetectionError("detect() called before load().")
         try:
-            results = self._model.predict(
-                frame.image,
-                conf=self._confidence,
-                iou=self._iou,
-                device=self._device,
-                verbose=False,
-            )
+            if self._track:
+                results = self._model.track(
+                    frame.image, conf=self._confidence, iou=self._iou,
+                    device=self._device, tracker=self._tracker,
+                    persist=True, verbose=False,
+                )
+            else:
+                results = self._model.predict(
+                    frame.image, conf=self._confidence, iou=self._iou,
+                    device=self._device, verbose=False,
+                )
         except Exception as exc:  # noqa: BLE001
             raise DetectionError(f"Inference failed: {exc}") from exc
 
@@ -116,6 +138,9 @@ class YoloDetector:
             for i, box in enumerate(boxes):
                 xyxy = box.xyxy[0].tolist()
                 class_id = int(box.cls[0])
+                track_id = None
+                if getattr(box, "id", None) is not None:
+                    track_id = int(box.id[0])
                 detections.append(
                     Detection(
                         label=str(names.get(class_id, class_id)),
@@ -124,6 +149,7 @@ class YoloDetector:
                         source_plugin=self._info.key,
                         class_id=class_id,
                         keypoints=keypoints[i] if i < len(keypoints) else (),
+                        track_id=track_id,
                     )
                 )
         return detections

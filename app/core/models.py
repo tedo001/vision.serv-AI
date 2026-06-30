@@ -109,6 +109,7 @@ class Detection:
     source_plugin: str
     class_id: Optional[int] = None
     keypoints: tuple[tuple[float, float, float], ...] = ()
+    track_id: Optional[int] = None  # stable id across frames (ByteTrack)
     timestamp: float = field(default_factory=time.time)
 
 

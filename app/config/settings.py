@@ -85,6 +85,10 @@ class DetectionConfig:
     model_dir: str = "assets/models"
     active_model: str = "yolo26n"
     enabled: bool = False
+    # Multiple models can run at once (object + pose + PPE + ...). Empty means
+    # "just the active_model". track enables ByteTrack IDs across frames.
+    enabled_models: tuple[str, ...] = ()
+    track: bool = False
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "DetectionConfig":
@@ -99,7 +103,14 @@ class DetectionConfig:
             model_dir=str(data.get("model_dir", "assets/models")),
             active_model=str(data.get("active_model", "yolo26n")),
             enabled=bool(data.get("enabled", False)),
+            enabled_models=tuple(data.get("enabled_models", []) or []),
+            track=bool(data.get("track", False)),
         )
+
+    @property
+    def effective_models(self) -> tuple[str, ...]:
+        """Models to actually run: the enabled set, or the active model."""
+        return self.enabled_models or (self.active_model,)
 
 
 @dataclass(frozen=True, slots=True)

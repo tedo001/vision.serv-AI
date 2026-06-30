@@ -25,6 +25,8 @@ from app.core.logging_config import get_logger
 from app.core.models import Detection, Event
 from app.detection.drawing import draw_detections
 from app.events.engine import EventEngine
+from app.rules.context import RuleContext
+from app.rules.engine import RuleEngine
 
 logger = get_logger(__name__)
 
@@ -57,6 +59,7 @@ class DetectionRunner:
         profile_id: str = "",
         screenshot_dir: str | None = None,
         action_fn: Callable[[list[Detection]], list[Detection]] | None = None,
+        rule_engine: RuleEngine | None = None,
     ) -> None:
         self._source = source
         self._detector = detector
@@ -69,6 +72,7 @@ class DetectionRunner:
         # filtering and appends synthetic detections (e.g. "fall").
         self._action_fn = action_fn
         self._event_engine = event_engine
+        self._rule_engine = rule_engine
         self._profile_id = profile_id
         self._screenshot_dir = screenshot_dir
         self._thread: Optional[threading.Thread] = None
@@ -156,14 +160,22 @@ class DetectionRunner:
                 if dt > 0:
                     fps = 0.9 * fps + 0.1 * (1.0 / dt)
 
+                generated: list[Event] = []
                 if self._event_engine is not None:
-                    events = self._event_engine.evaluate(
-                        self._source.camera_id, self._profile_id, detections, now)
-                    if events:
-                        events = [self._with_screenshot(e, annotated) for e in events]
-                        with self._lock:
-                            self._event_buffer.extend(events)
-                            self._event_total += len(events)
+                    generated.extend(self._event_engine.evaluate(
+                        self._source.camera_id, self._profile_id, detections, now))
+                if self._rule_engine is not None:
+                    h, w = frame.image.shape[:2]
+                    ctx = RuleContext(
+                        detections=tuple(detections), frame_width=int(w),
+                        frame_height=int(h), camera_id=self._source.camera_id,
+                        profile_id=self._profile_id, timestamp=now)
+                    generated.extend(self._rule_engine.evaluate(ctx))
+                if generated:
+                    generated = [self._with_screenshot(e, annotated) for e in generated]
+                    with self._lock:
+                        self._event_buffer.extend(generated)
+                        self._event_total += len(generated)
 
                 with self._lock:
                     self._latest = RunnerResult(

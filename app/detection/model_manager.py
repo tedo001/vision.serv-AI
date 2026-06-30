@@ -12,6 +12,7 @@ from pathlib import Path
 
 from app.config.settings import AppConfig
 from app.core.logging_config import get_logger
+from app.detection.composite import CompositeDetector
 from app.detection.model_catalog import MODELS, ModelInfo, register_model
 from app.detection.yolo_detector import YoloDetector
 
@@ -75,4 +76,34 @@ def build_detector(
         iou=det.iou,
         device=device_override or det.device,
         model_dir=det.model_dir,
+        track=det.track,
     )
+
+
+def build_composite(
+    config: AppConfig,
+    *,
+    device_override: str | None = None,
+):
+    """Build a detector for ALL enabled models.
+
+    Returns a single ``YoloDetector`` when one model is enabled, or a
+    ``CompositeDetector`` running them together. Unknown keys are skipped with
+    a warning so one bad entry doesn't break detection.
+    """
+    det = config.detection
+    detectors = []
+    for key in det.effective_models:
+        if key not in MODELS:
+            logger.warning("Skipping unknown enabled model: %s", key)
+            continue
+        detectors.append(YoloDetector(
+            key, confidence=det.confidence, iou=det.iou,
+            device=device_override or det.device, model_dir=det.model_dir,
+            track=det.track,
+        ))
+    if not detectors:
+        raise ValueError("No valid models enabled for detection.")
+    if len(detectors) == 1:
+        return detectors[0]
+    return CompositeDetector(detectors, name="+".join(det.effective_models))

@@ -27,8 +27,8 @@ from app.ui.widgets import section_title
 
 logger = get_logger(__name__)
 
-# (active_model, enabled, confidence, iou, device)
-ApplyModelsCallback = Callable[[str, bool, float, float, str], None]
+# (active_model, enabled, confidence, iou, device, enabled_models, track)
+ApplyModelsCallback = Callable[[str, bool, float, float, str, tuple[str, ...], bool], None]
 
 _DEVICE_CHOICES = {"Auto": "auto", "CPU": "cpu", "GPU": "cuda"}
 _DEVICE_LABELS = {v: k for k, v in _DEVICE_CHOICES.items()}
@@ -92,6 +92,27 @@ class SettingsView(BaseView):
                                        state="readonly", width=7)
         self._device_cb.set(_DEVICE_LABELS.get(self._config.detection.device, "Auto"))
         self._device_cb.pack(side="left")
+
+        self._track_var = tk.BooleanVar(value=self._config.detection.track)
+        ttk.Checkbutton(row1, text="Track (ByteTrack)",
+                        variable=self._track_var, takefocus=False).pack(
+            side="left", padx=(16, 0))
+
+        # Multi-model: run several models together (object + pose + PPE + …).
+        ttk.Label(card, text="Run multiple models together (Ctrl/Shift-click):",
+                  style="SurfaceMuted.TLabel").pack(anchor="w", pady=(10, 2))
+        self._models_listbox = tk.Listbox(
+            card, selectmode="multiple", height=6, exportselection=False,
+            background=PALETTE.surface_alt, foreground=PALETTE.text,
+            highlightthickness=0, borderwidth=0, activestyle="none")
+        self._listbox_keys = [m.key for m in MODELS.values()]
+        for m in MODELS.values():
+            self._models_listbox.insert("end", f"{m.display_name}  [{m.task}]")
+        enabled = set(self._config.detection.effective_models)
+        for i, key in enumerate(self._listbox_keys):
+            if key in enabled:
+                self._models_listbox.selection_set(i)
+        self._models_listbox.pack(fill="x", pady=(0, 4))
 
         # Threshold sliders
         self._conf_var = tk.DoubleVar(value=self.state.confidence.value)
@@ -193,11 +214,15 @@ class SettingsView(BaseView):
         conf = round(float(self._conf_var.get()), 2)
         iou = round(float(self._iou_var.get()), 2)
         device = _DEVICE_CHOICES[self._device_cb.get()]
-        logger.info("Apply model settings: model=%s enabled=%s conf=%.2f iou=%.2f dev=%s",
-                    model_key, enabled, conf, iou, device)
+        track = bool(self._track_var.get())
+        enabled_models = tuple(self._listbox_keys[i]
+                               for i in self._models_listbox.curselection())
+        logger.info("Apply model settings: model=%s enabled=%s conf=%.2f iou=%.2f "
+                    "dev=%s track=%s models=%s",
+                    model_key, enabled, conf, iou, device, track, enabled_models)
 
         if self._on_apply is not None:
-            self._on_apply(model_key, enabled, conf, iou, device)
+            self._on_apply(model_key, enabled, conf, iou, device, enabled_models, track)
         else:  # standalone fallback: update live state only
             self.state.active_model.set(model_key)
             self.state.model_enabled.set(enabled)

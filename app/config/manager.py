@@ -149,6 +149,8 @@ class ConfigManager:
         confidence: float | None = None,
         iou: float | None = None,
         device: str | None = None,
+        enabled_models: tuple[str, ...] | None = None,
+        track: bool | None = None,
     ) -> AppConfig:
         """Apply detection/model changes and persist them.
 
@@ -164,6 +166,9 @@ class ConfigManager:
             "model_dir": current.model_dir,
             "active_model": current.active_model if active_model is None else active_model,
             "enabled": current.enabled if enabled is None else enabled,
+            "enabled_models": list(
+                current.enabled_models if enabled_models is None else enabled_models),
+            "track": current.track if track is None else track,
         }
         new_detection: DetectionConfig = DetectionConfig.from_dict(merged)
         new_config = replace(self.config, detection=new_detection)

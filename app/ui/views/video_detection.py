@@ -26,12 +26,15 @@ from app.core.models import Alert, CameraSourceType, Event, EventSeverity
 from app.database.sqlite_sink import SqliteEventSink
 from app.detection.actions import detect_actions
 from app.detection.model_catalog import get_model
-from app.detection.model_manager import build_detector
+from app.detection.model_manager import build_composite
 from app.detection.null_detector import NullDetector
 from app.detection.runner import DetectionRunner
 from app.events.engine import EventEngine
 from app.profiles.catalog import get_profile
 from app.profiles.engine import relevant_classes
+from app.rules.builtins import default_rules
+from app.rules.engine import RuleEngine
+from app.rules.loader import load_rules_from_dir
 from app.ui.state import DetectionStats
 from app.ui.state import AppState, ConnectionStatus
 from app.ui.theme import PALETTE
@@ -52,14 +55,20 @@ _POLL_MS = 30
 
 
 class VideoDetectionView(BaseView):
-    def __init__(self, parent: tk.Widget, state: AppState, config: AppConfig) -> None:
+    def __init__(self, parent: tk.Widget, state: AppState, config: AppConfig,
+                 config_manager=None) -> None:
         self._config = config
+        # Read the live config (post-Settings-Apply) when starting a run.
+        self._config_manager = config_manager
         self._runner: DetectionRunner | None = None
         self._poll_job: str | None = None
         self._photo = None  # keep a ref so Tk doesn't GC the image
         self._event_sink: SqliteEventSink | None = None
         self._events_today = 0
         super().__init__(parent, state)
+
+    def _live_config(self) -> AppConfig:
+        return self._config_manager.config if self._config_manager else self._config
 
     # -- layout --------------------------------------------------------------
     def build(self) -> None:
@@ -210,33 +219,36 @@ class VideoDetectionView(BaseView):
             device = "cpu"
             self.state.status_message.set("GPU not available — using CPU.")
 
+        cfg = self._live_config()
         class_filter = None
+        event_engine = None
+        rule_engine = None
+        action_fn = None
         if self._preview_only.get():
             detector = NullDetector()  # raw feed: no model, no weight download
             self._stats.configure(text="Preview mode — testing camera (no detection).")
         else:
-            detector = build_detector(
-                self._config,
-                model_override=self.state.active_model.value,
-                device_override=device,
-            )
+            # Runs ALL enabled models together (object + pose + PPE + ...).
+            detector = build_composite(cfg, device_override=device)
             if self._filter_profile.get():
                 classes = relevant_classes(self.state.active_profile.value)
                 class_filter = classes or None  # empty profile -> show all
+            sink = self._ensure_sink()
+            event_engine = EventEngine(sinks=(sink,))
+            rule_engine = self._build_rule_engine(sink)
+            if self._detect_actions.get():
+                action_fn = detect_actions
+            self._stats.configure(
+                text=f"Models: {detector.name}  •  rules: "
+                     f"{rule_engine.rule_count if rule_engine else 0}")
 
-        # Detection runs generate events to the DB and the UI; preview does not.
-        event_engine = None
-        if not self._preview_only.get():
-            event_engine = EventEngine(sinks=(self._ensure_sink(),))
-        action_fn = None
-        if not self._preview_only.get() and self._detect_actions.get():
-            action_fn = detect_actions
         self._runner = DetectionRunner(
             source, detector, loop_video=loop_video, class_filter=class_filter,
             event_engine=event_engine,
             profile_id=self.state.active_profile.value,
-            screenshot_dir=self._config.screenshot_dir,
+            screenshot_dir=cfg.screenshot_dir,
             action_fn=action_fn,
+            rule_engine=rule_engine,
         )
         self._runner.start()
 
@@ -332,9 +344,18 @@ class VideoDetectionView(BaseView):
 
     def _ensure_sink(self) -> SqliteEventSink:
         if self._event_sink is None:
-            self._event_sink = SqliteEventSink(self._config.database_path)
+            self._event_sink = SqliteEventSink(self._live_config().database_path)
             self._events_today = self._event_sink.count_today()
         return self._event_sink
+
+    def _build_rule_engine(self, sink) -> RuleEngine:
+        """Default rules + any custom Python rules dropped in ./rules."""
+        rules = list(default_rules())
+        try:
+            rules += load_rules_from_dir("rules")
+        except Exception as exc:  # noqa: BLE001 - bad custom rule shouldn't block detection
+            logger.warning("Custom rules failed to load: %s", exc)
+        return RuleEngine(tuple(rules), sinks=(sink,))
 
     def _ingest_events(self, events: list[Event]) -> None:
         """Merge newly generated events into the shared UI state (main thread)."""

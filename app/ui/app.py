@@ -110,7 +110,8 @@ class VisionApp:
             NavSection.DASHBOARD: lambda p: DashboardView(p, state),
             NavSection.PROFILES: lambda p: ProfilesView(p, state, self._profile_engine),
             NavSection.CAMERAS: lambda p: CamerasView(p, state),
-            NavSection.VIDEO_DETECTION: lambda p: VideoDetectionView(p, state, self._config),
+            NavSection.VIDEO_DETECTION: lambda p: VideoDetectionView(
+                p, state, self._config, self._config_manager),
             NavSection.MODULES: lambda p: ModulesView(p, state),
             NavSection.EVENTS: lambda p: EventsView(p, state),
             NavSection.REPORTS: lambda p: ReportsView(p, state, self._config),
@@ -146,7 +147,7 @@ class VisionApp:
     # -- settings actions ----------------------------------------------------
     def _apply_model_settings(
         self, model_key: str, enabled: bool, confidence: float, iou: float,
-        device: str,
+        device: str, enabled_models: tuple[str, ...] = (), track: bool = False,
     ) -> None:
         """Update live state and persist detection/model settings to YAML."""
         self._state.active_model.set(model_key)
@@ -157,6 +158,7 @@ class VisionApp:
             self._config = self._config_manager.update_detection(
                 active_model=model_key, enabled=enabled,
                 confidence=confidence, iou=iou, device=device,
+                enabled_models=enabled_models, track=track,
             )
             logger.info("Persisted detection settings (model=%s, enabled=%s)",
                         model_key, enabled)
