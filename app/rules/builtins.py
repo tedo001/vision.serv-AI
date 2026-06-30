@@ -8,7 +8,7 @@ emits those labels is running — they are inert otherwise, by design.
 
 from __future__ import annotations
 
-from app.core.models import EventSeverity
+from app.core.models import BoundingBox, EventSeverity
 from app.rules.context import RuleContext, RuleResult
 
 # Common label spellings across datasets.
@@ -16,6 +16,16 @@ _NO_HELMET = {"no_helmet", "no-helmet", "nohelmet", "head", "without_helmet"}
 _NO_VEST = {"no_vest", "no-vest", "without_vest"}
 _FIRE = {"fire", "flame"}
 _SMOKE = {"smoke"}
+# COCO vehicle/machinery classes — usable for proximity hazards with no training.
+_VEHICLES = {"truck", "bus", "car", "motorcycle", "bicycle", "train",
+             "forklift", "airplane", "boat"}
+
+
+def _box_gap(a: BoundingBox, b: BoundingBox) -> float:
+    """Shortest pixel distance between two boxes (0 if they overlap/touch)."""
+    dx = max(0.0, a.x1 - b.x2, b.x1 - a.x2)
+    dy = max(0.0, a.y1 - b.y2, b.y1 - a.y2)
+    return (dx * dx + dy * dy) ** 0.5
 
 
 def _named(fn, name: str):
@@ -89,7 +99,38 @@ def restricted_zone_rule(x1f: float, y1f: float, x2f: float, y2f: float):
     return _named(rule, "restricted_zone")
 
 
+def vehicle_proximity_rule(gap_frac: float = 0.04):
+    """Worker dangerously close to a vehicle/machine (struck-by hazard).
+
+    Uses only COCO classes (person + vehicles), so it needs NO custom training.
+    ``gap_frac`` is the alert distance as a fraction of the frame width; 0 means
+    boxes must overlap.
+    """
+    def rule(ctx: RuleContext) -> list[RuleResult]:
+        threshold = gap_frac * ctx.frame_width
+        workers = ctx.by_label("person")
+        hazards = [d for d in ctx.detections if d.label in _VEHICLES]
+        out: list[RuleResult] = []
+        for worker in workers:
+            for hazard in hazards:
+                gap = _box_gap(worker.box, hazard.box)
+                if gap <= threshold:
+                    key = f"{worker.track_id}-{hazard.track_id}"
+                    out.append(RuleResult(
+                        "vehicle_proximity", EventSeverity.HIGH,
+                        f"Worker dangerously close to {hazard.label} "
+                        f"({gap:.0f}px)", (worker, hazard), dedupe_key=key))
+                    break  # one alert per worker per frame
+        return out
+    return _named(rule, "vehicle_proximity")
+
+
 def default_rules() -> tuple:
-    """A sensible default rule set (label-driven rules are inert until a model
-    emits those labels)."""
-    return (no_ppe_rule(), fire_smoke_rule(), max_occupancy_rule(25))
+    """A sensible default rule set. Label-driven rules (PPE/fire) stay inert
+    until a model emits those labels; proximity/occupancy work on COCO today."""
+    return (
+        no_ppe_rule(),
+        fire_smoke_rule(),
+        max_occupancy_rule(25),
+        vehicle_proximity_rule(),
+    )

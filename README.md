@@ -108,7 +108,9 @@ Models say *what* is present; **rules** decide *what's an incident*. A rule is a
 plain Python callable that inspects a `RuleContext` (detections, tracks, frame
 size, profile) and returns `RuleResult`s, which the engine debounces and turns
 into events/alerts. Built-ins: PPE (no-helmet/vest), fire/smoke, max-occupancy,
-restricted-zone. **Add your own** by dropping a `.py` file in [`rules/`](rules/)
+restricted-zone, and **vehicle-proximity** (worker too close to a
+vehicle/forklift — a real struck-by hazard detected from COCO classes alone,
+no training needed). **Add your own** by dropping a `.py` file in [`rules/`](rules/)
 exposing a `RULES = [...]` list (see `rules/example_loitering.py`) — auto-loaded
 at startup, no core changes. Rules that key off specific labels (helmet, fire)
 stay inert until a model that emits those labels is running.

@@ -17,6 +17,7 @@ from app.rules.builtins import (
     max_occupancy_rule,
     no_ppe_rule,
     restricted_zone_rule,
+    vehicle_proximity_rule,
 )
 from app.rules.context import RuleContext
 from app.rules.engine import RuleEngine
@@ -109,6 +110,19 @@ def test_restricted_zone_rule_uses_frame_fractions() -> None:
     rule = restricted_zone_rule(0.25, 0.25, 0.75, 0.75)
     results = rule(_ctx([inside, outside]))
     assert len(results) == 1 and results[0].event_type == "restricted_zone"
+
+
+def test_vehicle_proximity_uses_coco_classes_only() -> None:
+    # 200px-wide frame, alert within 4% (=8px). Person touching a truck fires;
+    # a far-away person does not. No custom classes needed.
+    near_worker = _det("person", box=BoundingBox(100, 100, 140, 200))
+    truck = _det("truck", box=BoundingBox(140, 100, 200, 200))   # touching
+    far_worker = _det("person", box=BoundingBox(0, 0, 20, 40))
+    rule = vehicle_proximity_rule(gap_frac=0.04)
+    results = rule(_ctx([near_worker, truck, far_worker], w=200, h=200))
+    assert len(results) == 1
+    assert results[0].event_type == "vehicle_proximity"
+    assert results[0].severity == EventSeverity.HIGH
 
 
 # --- rule engine debounce + events ------------------------------------------
