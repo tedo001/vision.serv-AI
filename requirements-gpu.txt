@@ -1,0 +1,36 @@
+# ============================================================================
+# AI Vision Platform - GPU (CUDA) dependencies
+# ----------------------------------------------------------------------------
+# For the `venv_gpu` environment on machines with an NVIDIA GPU.
+# Pinned to CUDA 12.1 wheels (matches torch 2.5.1+cu121 / Python 3.10-3.12).
+#
+# Create the env and install:
+#     python -m venv venv_gpu
+#     venv_gpu\Scripts\activate            (Windows)
+#     source venv_gpu/bin/activate         (Linux/macOS)
+#     pip install -r requirements-gpu.txt
+#
+# If you have a different CUDA version, change the cu121 tag below to match
+# (e.g. cu118) — see https://pytorch.org/get-started/locally/
+# ============================================================================
+
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+# --- Deep learning (CUDA build) ---
+torch==2.5.1
+torchvision==0.20.1
+
+# --- AI / inference ---
+ultralytics>=8.1.0
+
+# --- Computer vision ---
+opencv-python>=4.9.0
+Pillow>=10.2.0
+numpy>=1.26.0
+
+# --- Core ---
+PyYAML>=6.0.1
+
+# --- Tooling / tests ---
+pytest>=8.0.0
+pytest-cov>=4.1.0
