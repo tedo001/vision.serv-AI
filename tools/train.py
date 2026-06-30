@@ -27,9 +27,48 @@ import shutil
 import sys
 from pathlib import Path
 
+import yaml
+
 from app.core.logging_config import configure_logging, get_logger
 
 logger = get_logger(__name__)
+
+_IMAGE_EXTS = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.webp")
+
+
+def _resolve_and_check(data_path: str) -> tuple[str | None, list[str]]:
+    """Resolve a dataset's ``path`` to an absolute dir and validate contents.
+
+    Returns (resolved_yaml_path, problems). ``path`` in the YAML is resolved
+    relative to the YAML file itself (so ``path: .`` means "this folder"),
+    avoiding Ultralytics' cwd/settings-dependent resolution. Writes a sibling
+    ``*.resolved.yaml`` with an absolute path for training.
+    """
+    p = Path(data_path)
+    if not p.exists():
+        return None, [f"data.yaml not found: {p}"]
+
+    cfg = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    root = (p.parent / str(cfg.get("path", "."))).resolve()
+    cfg["path"] = str(root)
+
+    problems: list[str] = []
+    for split in ("train", "val"):
+        rel = cfg.get(split)
+        if not rel:
+            problems.append(f"'{split}:' is not set in {p.name}")
+            continue
+        folder = (root / str(rel))
+        if not folder.is_dir():
+            problems.append(f"missing {split} image folder: {folder}")
+            continue
+        images = [f for ext in _IMAGE_EXTS for f in folder.glob(ext)]
+        if not images:
+            problems.append(f"no images found in {split} folder: {folder}")
+
+    resolved = p.parent / f"{p.stem}.resolved.yaml"
+    resolved.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+    return str(resolved), problems
 
 
 def train(
@@ -42,22 +81,37 @@ def train(
     project: str,
     model_dir: str,
 ) -> int:
+    # Validate the dataset FIRST (fail fast, before the slow torch import).
+    # Built-in sample datasets (e.g. coco8.yaml) are resolved by Ultralytics.
+    train_data = data
+    if not data.endswith("coco8.yaml"):
+        resolved, problems = _resolve_and_check(data)
+        if problems:
+            print("\nDataset is not ready to train:")
+            for problem in problems:
+                print(f"  ✗ {problem}")
+            print("\nThis is expected if you haven't added labeled data yet.")
+            print("Put images + YOLO label files under the dataset folder:")
+            print("  datasets/safety/images/train,  images/val")
+            print("  datasets/safety/labels/train,  labels/val")
+            print("See datasets/README.md. To verify the pipeline works first,")
+            print("run a smoke test:  python -m tools.train --data coco8.yaml "
+                  "--base yolo11n.pt --epochs 2")
+            return 1
+        train_data = resolved
+        print(f"Dataset OK. Using resolved config: {train_data}")
+
     try:
         from ultralytics import YOLO
     except ImportError:
         print("ultralytics is not installed. Run: pip install ultralytics")
         return 1
 
-    if data != "coco8.yaml" and not Path(data).exists():
-        print(f"Dataset config not found: {data}\n"
-              f"See datasets/README.md for the expected format.")
-        return 1
-
-    print(f"Fine-tuning {base} on {data} for {epochs} epochs (imgsz={imgsz}, "
-          f"device={device})…")
+    print(f"Fine-tuning {base} on {train_data} for {epochs} epochs "
+          f"(imgsz={imgsz}, device={device})…")
     model = YOLO(base)
     results = model.train(
-        data=data, epochs=epochs, imgsz=imgsz,
+        data=train_data, epochs=epochs, imgsz=imgsz,
         device=(None if device == "auto" else device),
         project=project, name=name, exist_ok=True,
     )
