@@ -84,7 +84,8 @@ class VisionApp:
         root.rowconfigure(1, weight=1)
         root.columnconfigure(0, weight=1)
 
-        TopNav(root, self._state).grid(row=0, column=0, sticky="ew")
+        TopNav(root, self._state, on_gpu_click=self._enable_gpu).grid(
+            row=0, column=0, sticky="ew")
 
         body = ttk.Frame(root)
         body.grid(row=1, column=0, sticky="nsew")
@@ -143,6 +144,38 @@ class VisionApp:
             ConnectionStatus.ONLINE if available else ConnectionStatus.OFFLINE)
         self._state.gpu_name.set(name)
         logger.info("Compute device: %s", name)
+
+    def _enable_gpu(self) -> None:
+        """Re-probe CUDA and switch detection to GPU (top-bar 'On' button)."""
+        import threading
+
+        self._state.status_message.set("Checking for GPU…")
+
+        def worker() -> None:
+            from app.core.device import gpu_info
+            available, name = gpu_info()
+            self._root.after(0, lambda: self._gpu_enable_result(available, name))
+
+        threading.Thread(target=worker, name="gpu-enable", daemon=True).start()
+
+    def _gpu_enable_result(self, available: bool, name: str) -> None:
+        from app.ui.state import ConnectionStatus
+        if available:
+            self._state.gpu_status.set(ConnectionStatus.ONLINE)
+            self._state.gpu_name.set(name)
+            try:
+                self._config = self._config_manager.update_detection(device="cuda")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Failed to persist GPU device: %s", exc)
+            self._state.status_message.set(f"GPU enabled: {name}")
+        else:
+            self._state.gpu_status.set(ConnectionStatus.OFFLINE)
+            try:
+                self._config = self._config_manager.update_detection(device="cpu")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Failed to persist CPU fallback: %s", exc)
+            self._state.status_message.set(
+                "No CUDA GPU detected — install a CUDA build of torch, or use CPU.")
 
     # -- settings actions ----------------------------------------------------
     def _apply_model_settings(
