@@ -42,6 +42,18 @@ is the index into the `names` list in `data.yaml`.
 [Roboflow]: https://roboflow.com/
 [CVAT]: https://www.cvat.ai/
 
+## Already have images + labels but not split into train/val?
+
+Use the prep tool — it splits a flat folder and writes `data.yaml` for you:
+
+```bash
+python -m tools.prepare_dataset --src path/to/raw_labeled --out datasets/safety \
+    --names person,helmet,no_helmet,safety_vest --val 0.2
+```
+
+(`--src` is a folder of images with matching `<image>.txt` YOLO labels;
+images without a label are kept as background samples.)
+
 ## Train
 
 ```bash

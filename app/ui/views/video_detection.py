@@ -24,7 +24,7 @@ from app.core.device import cuda_available, gpu_info, resolve_device
 from app.core.logging_config import get_logger
 from app.core.models import Alert, CameraSourceType, Event, EventSeverity
 from app.database.sqlite_sink import SqliteEventSink
-from app.detection.actions import detect_actions
+from app.detection.actions import FallActionDetector
 from app.detection.model_catalog import get_model
 from app.detection.model_manager import build_composite
 from app.detection.null_detector import NullDetector
@@ -237,7 +237,9 @@ class VideoDetectionView(BaseView):
             event_engine = EventEngine(sinks=(sink,))
             rule_engine = self._build_rule_engine(sink)
             if self._detect_actions.get():
-                action_fn = detect_actions
+                # Stateful: requires a ~1s sustained fall before alerting,
+                # which kills the single-frame false positives (sitting/bending).
+                action_fn = FallActionDetector(confirm_seconds=1.0)
             self._stats.configure(
                 text=f"Models: {detector.name}  •  rules: "
                      f"{rule_engine.rule_count if rule_engine else 0}")

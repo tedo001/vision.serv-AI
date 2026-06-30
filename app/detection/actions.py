@@ -18,6 +18,9 @@ without changing callers (the output is just more ``Detection`` objects).
 
 from __future__ import annotations
 
+import time
+from typing import Callable
+
 from app.core.models import BoundingBox, Detection
 
 # COCO-17 keypoint indices.
@@ -65,11 +68,53 @@ def detect_actions(detections: list[Detection]) -> list[Detection]:
         if det.label != "person":
             continue
         if is_fallen(det):
-            actions.append(Detection(
-                label="fall",
-                confidence=det.confidence,
-                box=det.box,
-                source_plugin=f"{det.source_plugin}:action",
-                keypoints=det.keypoints,
-            ))
+            actions.append(_as_fall(det))
     return actions
+
+
+def _as_fall(det: Detection) -> Detection:
+    return Detection(
+        label="fall",
+        confidence=det.confidence,
+        box=det.box,
+        source_plugin=f"{det.source_plugin}:action",
+        keypoints=det.keypoints,
+        track_id=det.track_id,
+    )
+
+
+class FallActionDetector:
+    """Stateful fall detection with a confirmation window.
+
+    A person must remain in a fallen pose for ``confirm_seconds`` before a
+    ``fall`` is emitted — this rejects the single-frame false positives that
+    bending/sitting produce. State is keyed by ByteTrack ``track_id`` when
+    available (per-person), otherwise a shared bucket. Wall-clock based, so it
+    behaves the same regardless of frame rate. Use one instance per run.
+
+    Call it like ``detect_actions`` (``detector(detections) -> list``) so it
+    drops into the runner's ``action_fn`` slot.
+    """
+
+    def __init__(self, *, confirm_seconds: float = 1.0,
+                 clock: Callable[[], float] = time.time) -> None:
+        self._confirm = confirm_seconds
+        self._clock = clock
+        self._fallen_since: dict[int, float] = {}
+
+    def __call__(self, detections: list[Detection]) -> list[Detection]:
+        now = self._clock()
+        actions: list[Detection] = []
+        seen: set[int] = set()
+        for det in detections:
+            if det.label != "person" or not is_fallen(det):
+                continue
+            key = det.track_id if det.track_id is not None else -1
+            seen.add(key)
+            started = self._fallen_since.setdefault(key, now)
+            if now - started >= self._confirm:
+                actions.append(_as_fall(det))
+        # Reset timers for anyone no longer fallen (so they must re-confirm).
+        for key in [k for k in self._fallen_since if k not in seen]:
+            del self._fallen_since[key]
+        return actions

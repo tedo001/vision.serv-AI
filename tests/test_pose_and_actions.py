@@ -7,7 +7,7 @@ import types
 import numpy as np
 
 from app.core.models import BoundingBox, Detection, EventSeverity
-from app.detection.actions import detect_actions, is_fallen
+from app.detection.actions import FallActionDetector, detect_actions, is_fallen
 from app.detection.model_catalog import MODELS, get_model
 from app.detection.runner import DetectionRunner
 from app.detection.yolo_detector import YoloDetector
@@ -84,6 +84,50 @@ def test_detect_actions_emits_fall_for_people_only() -> None:
     actions = detect_actions(dets)
     assert [a.label for a in actions] == ["fall"]
     assert actions[0].source_plugin.endswith(":action")
+
+
+# --- fall confirmation window (false-positive fix) --------------------------
+class _Clock:
+    def __init__(self) -> None:
+        self.t = 0.0
+
+    def __call__(self) -> float:
+        return self.t
+
+
+def test_fall_requires_sustained_window() -> None:
+    """A momentary horizontal pose must NOT alert; a sustained one must."""
+    clock = _Clock()
+    det = FallActionDetector(confirm_seconds=1.0, clock=clock)
+    fallen = _person_with_torso(dx=80, dy=5)
+    fallen = Detection("person", 0.9, fallen.box, "pose",
+                       keypoints=fallen.keypoints, track_id=1)
+
+    clock.t = 0.0
+    assert det([fallen]) == []          # first frame: not confirmed yet
+    clock.t = 0.5
+    assert det([fallen]) == []          # 0.5s: still within window
+    clock.t = 1.1
+    out = det([fallen])                 # >1s sustained: fires
+    assert [d.label for d in out] == ["fall"]
+
+
+def test_brief_pose_then_recovery_does_not_alert() -> None:
+    clock = _Clock()
+    det = FallActionDetector(confirm_seconds=1.0, clock=clock)
+    person = _person_with_torso(dx=80, dy=5)
+    fallen = Detection("person", 0.9, person.box, "pose",
+                       keypoints=person.keypoints, track_id=1)
+    standing = Detection("person", 0.9, BoundingBox(0, 0, 50, 180), "pose", track_id=1)
+
+    clock.t = 0.0
+    det([fallen])
+    clock.t = 0.4
+    det([fallen])
+    clock.t = 0.6
+    assert det([standing]) == []        # recovered before 1s -> timer resets
+    clock.t = 1.2
+    assert det([standing]) == []        # still standing -> no alert
 
 
 # --- fall -> event severity -------------------------------------------------
